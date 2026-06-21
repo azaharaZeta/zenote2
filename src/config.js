@@ -20,17 +20,15 @@ export const START = {
 export const RENDER_P = {
   tps: 60,             // UI: Velocidad — ticks de simulación por segundo
   maxFps: 20,          // UI: FPS — límite de dibujos por segundo (no afecta a la sim)
-  bloom: 0.75,         // UI: Bioluminiscencia — intensidad del aura+bloom (0 = apagado; recomendado en móvil/Baja)
+  bloom: 0.75,         // UI: Bioluminiscencia — intensidad del glow/bloom (0 = apagado; recomendado en móvil/Baja)
   zoom: 1,             // UI: Zoom — zoom inicial
   colorMode: 'natural',// UI: Colorear por — modo inicial (natural · natmix · tissue · role · lineage)
   quality: 'alta',     // UI: Calidad gráfica — preset de LOD/resolución/atmósfera (alta · media · baja); 'baja' = móvil/equipos lentos
   zoomMin: 1, zoomMax: 16,   // NO UI — límites del zoom (mín. 1 = el mundo entero cabe)
-  dprCap: 2,           // NO UI — tope de devicePixelRatio (rendimiento)
-  bloomDiv: 5,         // NO UI — el bloom reduce la capa de organismos a 1/bloomDiv y la reescala (downsampled)
+  dprCap: 2,           // NO UI — tope de devicePixelRatio. Hoy lo fija el preset de QUALITY (dprCap por nivel); se conserva como referencia del nivel 'alta'.
+  bloomDiv: 5,         // NO UI — factor de reducción BASE del bloom (a zoom 1); en main.js el factor escala con el zoom (bd = bloomDiv·zoom)
   maxSnapMs: 250,      // NO UI — en MÁX: un fotograma cada N ms (≈4 fps; el lote ≤N garantiza ≥1 fps)
   undulation: 2.2,     // NO UI — amplitud de la onda viajera (carácter "vivo" del cuerpo)
-  auraMul: 2.2,        // NO UI — radio del halo/aura (× tamaño del nodo)
-  auraAlpha: 0.10,     // NO UI — opacidad base del aura (× bloom × energía)
   border: 'rgba(4,7,12,0.55)',  // NO UI — color del borde (nodos y ojos), trazo oscuro abisal
   borderW: 1.2,        // NO UI — grosor del borde de los nodos (px)
   speckleMax: 3,       // NO UI — máx. de motas de textura por nodo (1..speckleMax, según linaje)
@@ -38,7 +36,7 @@ export const RENDER_P = {
 
 // PRESETS DE CALIDAD GRÁFICA (render PURO → NO toca la simulación ni el dorado). `RENDER_P.quality` elige el nivel; main.js
 // lee el preset activo. Cada nivel ajusta: dprCap (resolución de render; sustituye a RENDER_P.dprCap) · bloom (factor del
-// aura+bloom; 0 lo apaga junto con plancton/nieve) · atmos (densidad de plancton/nieve) · y los UMBRALES DE LOD en px a partir
+// el bloom/glow; 0 lo apaga junto con plancton/nieve) · atmos (densidad de plancton/nieve) · y los UMBRALES DE LOD en px a partir
 // de los cuales un nodo recibe silueta bézier (lodSil) / volumen-gradiente (lodVol, el más caro) / costillas (lodRib) / ojos
 // (lodEye). 'baja' = móvil/equipos lentos: sin bloom ni gradiente de volumen, siluetas solo de cerca → todo plano y barato.
 export const QUALITY = {

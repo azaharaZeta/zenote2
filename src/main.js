@@ -15,12 +15,14 @@ let cw = 0, ch = 0, vignette = null;
 // de él. 'baja' = móvil/equipos lentos. Cambiable en vivo (setQuality) sin tocar la simulación → el dorado nunca se mueve.
 let quality = RENDER_P.quality, Q = QUALITY[quality] || QUALITY.alta;
 let dpr = Math.min(Q.dprCap, window.devicePixelRatio || 1);
-// A4 — BLOOM (bioluminiscencia): la capa de ORGANISMOS se dibuja en un búfer aparte (glowCv); su versión reducida
-// (bloomCv, 1/BLOOM_DIV) se reescala aditivamente sobre el fondo → luz suave que sangra (coste ≈ 1/DIV², móvil ok).
-// bloomStrength=0 lo apaga (Baja/móvil). Es render PURO. Downsampled como en v1 (VISUAL.md).
+// A4 — BLOOM (bioluminiscencia): la capa de ORGANISMOS se dibuja en un búfer aparte (glowCv); su versión REDUCIDA (bloomCv) se
+// reescala aditiva sobre el fondo → luz suave que sangra. El factor de reducción ESCALA con el zoom (ver draw) → el glow es una
+// fracción ~constante del organismo a cualquier zoom. Se hace por REESCALADO (drawImage), compatible con TODOS los navegadores
+// — NO con ctx.filter blur (Safari < 16.4 lo ignora → sin glow). bloomStrength=0 lo apaga (Baja/móvil). Render PURO. Como en v1.
 const glowCv = document.createElement('canvas'), glowCtx = glowCv.getContext('2d');
 const bloomCv = document.createElement('canvas'), bloomCtx = bloomCv.getContext('2d');
-let bloomStrength = RENDER_P.bloom * Q.bloom; const BLOOM_DIV = RENDER_P.bloomDiv;   // bloom EFECTIVO = intensidad base × factor de calidad (0 en 'baja' → sin aura/plancton/nieve)
+const bloom2Cv = document.createElement('canvas'), bloom2Ctx = bloom2Cv.getContext('2d');   // 2º búfer del bloom: pre-blur del búfer pequeño (suaviza la "rejilla" del reescalado)
+let bloomStrength = RENDER_P.bloom * Q.bloom; const BLOOM_DIV = RENDER_P.bloomDiv;   // bloom EFECTIVO = intensidad base × factor de calidad (0 en 'baja' → sin glow/plancton/nieve)
 // FONDO DEL ABISMO = la VEGETACIÓN: el campo veg (que llega en cada frame) se hornea a una mini-textura (1 px/celda) y se
 // reescala SUAVIZADA → nebulosa VERDE (pasto/algas) sobre abismo. Donde hay más vegetación, más verde = ahí está la comida.
 // Fluye con la luz (su K sigue al campo de luz, que puede derivar — "Corriente del abismo").
@@ -54,7 +56,8 @@ function bakeVeg(veg) {
 function resize() {
   cw = canvas.clientWidth; ch = canvas.clientHeight; canvas.width = cw * dpr; canvas.height = ch * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   glowCv.width = canvas.width; glowCv.height = canvas.height; glowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  bloomCv.width = Math.max(1, (canvas.width / BLOOM_DIV) | 0); bloomCv.height = Math.max(1, (canvas.height / BLOOM_DIV) | 0);
+  bloomCv.width = Math.max(1, (canvas.width / BLOOM_DIV) | 0); bloomCv.height = Math.max(1, (canvas.height / BLOOM_DIV) | 0);   // miniatura del bloom a zoom 1 (máx.); a más zoom se usa una sub-región
+  bloom2Cv.width = bloomCv.width; bloom2Cv.height = bloomCv.height;   // 2º búfer del bloom (pre-blur): mismo tamaño máximo
   const g = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.75);
   g.addColorStop(0, 'rgba(5,8,13,0)'); g.addColorStop(1, 'rgba(2,4,8,0.7)'); vignette = g;
 }
@@ -188,25 +191,31 @@ function draw() {
   // CADÁVERES (#3): bajo los organismos, siluetas oscuras del linaje que se DESVANECEN con su carroña (muerte visible).
   for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawCorpses((tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc);
 
-  // ORGANISMOS → búfer aparte (glowCv). El GLOW lo da el BLOOM (desenfoque de los núcleos) → el slider de
-  // bioluminiscencia es el único control del brillo y se nota. Halo aditivo explícito SOLO en 'tissueaura' (aura de
-  // linaje sobre núcleo de tejido, que el bloom luego suaviza).
+  // ORGANISMOS → búfer aparte (glowCv). El GLOW sale del BLOOM: el desenfoque de los CUERPOS NÍTIDOS (su propio brillo/volumen)
+  // sangra como luz. (Se eliminó la antigua pasada de AURA — silueta ×2.2 plana semitransparente — que leía como una zona lisa
+  // pegada, no como luz; ahora SOLO glow.) El slider de bioluminiscencia controla su intensidad; 0 = apagado (Baja/móvil).
   glowCtx.clearRect(0, 0, cw, ch);
-  // AURA = BIOLUMINISCENCIA: halo de color real en TODOS los modos (en Natural = auto-glow; en falso-color = canal del
-  // color real). El bloom la suaviza. Gateada por el slider (0 = sin glow, móvil/Baja).
-  if (bloomStrength > 0) {
-    glowCtx.globalCompositeOperation = 'lighter';
-    for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t, true);
-  }
   glowCtx.globalCompositeOperation = 'source-over'; glowCtx.globalAlpha = 1;
   for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t, false);
 
-  // A4 — BLOOM: reduce glowCv a la miniatura y reescálala ADITIVA sobre el fondo (luz suave que sangra). 0 = apagado.
+  // A4 — BLOOM: reduce glowCv a una miniatura y reescálala ADITIVA sobre el fondo (luz que sangra). 0 = apagado. El radio del
+  // desenfoque ≈ el factor de reducción, en px de pantalla. Con factor FIJO, al acercar el organismo crecía pero el desenfoque no
+  // → el bloom se volvía imperceptible y solo quedaba el aura cruda (el defecto de escala que se veía a zoom alto). Por eso la
+  // reducción ESCALA con el zoom (bd = BLOOM_DIV·zoom): glow ~constante a cualquier zoom. A zoom 1 = BLOOM_DIV (idéntico a antes).
+  // Se dibuja en una sub-región bw×bh de bloomCv (cabe: bd ≥ BLOOM_DIV). Reescalado puro (drawImage) → compatible con TODO navegador.
   if (bloomStrength > 0) {
-    bloomCtx.clearRect(0, 0, bloomCv.width, bloomCv.height);
-    bloomCtx.drawImage(glowCv, 0, 0, bloomCv.width, bloomCv.height);
+    const bd = BLOOM_DIV * (zoom > 1 ? zoom : 1);
+    const bw = Math.max(2, (canvas.width / bd) | 0), bh = Math.max(2, (canvas.height / bd) | 0);
+    const hw = Math.max(1, bw >> 1), hh = Math.max(1, bh >> 1);
+    bloomCtx.imageSmoothingEnabled = true; bloom2Ctx.imageSmoothingEnabled = true;
+    bloomCtx.clearRect(0, 0, bw, bh);
+    bloomCtx.drawImage(glowCv, 0, 0, bw, bh);                             // 1) reduce glowCv → bw×bh (promedia bloques)
+    // 2) PRE-BLUR de los texeles (mata la "rejilla" que deja el bilinear al ampliar mucho): baja a la mitad en bloom2Cv y vuelve
+    //    a subir = un desenfoque 2× extra sobre el búfer pequeño. Barato (búfer diminuto). Cross-browser (solo drawImage).
+    bloom2Ctx.clearRect(0, 0, hw, hh); bloom2Ctx.drawImage(bloomCv, 0, 0, bw, bh, 0, 0, hw, hh);
+    bloomCtx.clearRect(0, 0, bw, bh); bloomCtx.drawImage(bloom2Cv, 0, 0, hw, hh, 0, 0, bw, bh);
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = bloomStrength; ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(bloomCv, 0, 0, cw, ch);
+    ctx.drawImage(bloomCv, 0, 0, bw, bh, 0, 0, cw, ch);                  // 3) reescala esa sub-región a pantalla completa
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
   // organismos NÍTIDOS encima
@@ -262,42 +271,30 @@ function drawCorpses(oX, oY, sc) {
   ctx.globalAlpha = 1;
 }
 
-function drawOrgs(c, oX, oY, sc, t, halo) {
+function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glowCv (el glow lo da el bloom al desenfocar este búfer)
   const { n, ax, ay, ah, aspd, ahue, aE, aGazeX, aGazeY, aAlert, arole, partOff, partData } = frame;
-  const mul = halo ? RENDER_P.auraMul : 1, baseA = halo ? RENDER_P.auraAlpha * bloomStrength : 1;   // AURA (=bioluminiscencia): escalada por el slider
-  if (!halo) { c.strokeStyle = RENDER_P.border; c.lineWidth = RENDER_P.borderW; }   // BORDE: trazo oscuro abisal fino; reaprovecha el path del relleno
+  c.strokeStyle = RENDER_P.border; c.lineWidth = RENDER_P.borderW;   // BORDE: trazo oscuro abisal fino; reaprovecha el path del relleno
   for (let a = 0; a < n; a++) {
     const wx = ax[a], wy = ay[a], bx = oX + wx * sc, by = oY + wy * sc;
     if (bx < -40 || bx > cw + 40 || by < -40 || by > ch + 40) continue;   // culling en pantalla
     const h = ah[a], chh = Math.cos(h), shh = Math.sin(h), spd = aspd[a], p0 = partOff[a], p1 = partOff[a + 1];
     // A2 — VITALIDAD: los hambrientos se atenúan (la muerte se ve venir). energía 0..1 → alpha 0.35..1.
-    c.globalAlpha = baseA * (aE ? 0.35 + 0.65 * aE[a] : 1);
-    // A2 — COLOR EN CAPAS. NATURAL (defecto, lo más cercano a "cómo se ven"): NÚCLEO por tejido (anatomía) + HALO por
-    // LINAJE (color heredado real = aura de familia) + brillo por energía + forma por silueta. TEJIDO/OFICIO/LINAJE =
-    // modos analíticos PUROS (una sola señal). (hsl solo se construye cuando se usa → sin alocar de más.)
-    // MODOS: 'natural' = ASPECTO REAL (todo el cuerpo = pigmento heredado/linaje, sin colorear por función) con auto-glow
-    // del mismo color; 'tissueaura' = núcleo por tejido (anatomía) + aura de linaje; 'tissue'/'role'/'lineage' = analíticos.
-    const natural = colorMode === 'natural', natMix = colorMode === 'natmix';
-    const hcol = (s, l) => `hsl(${(ahue[a] * 360) | 0},${s}%,${l}%)`;
-    // AURA (pasada halo) = SIEMPRE el color REAL (linaje): en Natural/natmix es auto-glow; en Tejido/Oficio es el canal
-    // del color real sobre el núcleo de función. NÚCLEO (pasada !halo) = según el modo.
-    const agentCol = halo ? hcol(60, 60)
-      : colorMode === 'role' ? (RCOL[arole[a]] || '#3fb98f')
-      : colorMode === 'lineage' ? hcol(58, 58)
-      : (natural || natMix) ? hcol(62, 54)               // cuerpo = pigmento real (natmix le superpone un % de tejido)
-      : null;                                            // 'tissue' → TCOL por nodo
-    // base HSL numérico del NÚCLEO para el SOMBREADO VOLUMÉTRICO (pasada !halo): natural/natmix/lineage = linaje · role = oficio · tissue = por nodo (abajo)
+    c.globalAlpha = aE ? 0.35 + 0.65 * aE[a] : 1;
+    // A2 — COLOR DEL NÚCLEO según el modo: 'natural'/'natmix' = pigmento heredado (linaje); 'tissue' = por tejido (anatomía);
+    // 'role' = oficio (dieta); 'lineage' = tono de linaje. El brillo ∝ energía (los hambrientos se atenúan); el glow lo da el bloom.
+    const natMix = colorMode === 'natmix';   // 'Natural + tejido': pigmento de linaje con un tinte sutil de la función
+    // base HSL numérico del NÚCLEO para el SOMBREADO VOLUMÉTRICO: natural/natmix/lineage = linaje · role = oficio · tissue = por nodo (abajo)
     let bH = ahue[a] * 360, bS = 62, bL = 54;
     if (colorMode === 'role') { const c0 = RCOL_HSL[arole[a]] || RCOL_HSL[0]; bH = c0[0]; bS = c0[1]; bL = c0[2]; }
     else if (colorMode === 'lineage') { bS = 58; bL = 58; }
     // TEXTURA — SEGMENTACIÓN: nº de COSTILLAS/bandas transversales derivado de `hue` (heredado) → familias comparten patrón
     // (lectura fiel del linaje, honesto). Sustituye a las antiguas "motas" (3 puntos gordos): leían como pegatina, no anatomía.
-    const bandN = !halo ? 3 + ((ahue[a] * 7919) | 0) % 4 : 0;   // 3..6 segmentos por nodo
+    const bandN = 3 + ((ahue[a] * 7919) | 0) % 4;   // 3..6 segmentos por nodo
     let bodyR = 0, headX = bx, headY = by, headR = 0, headScore = -1e9;   // OJOS: extensión del cuerpo (LOD) + parte-CABEZA donde ANCLAR los ojos (nodo más adelantado, leve preferencia BOCA = la "cara")
-    // CONTORNO unificado (solo !halo, reemplaza el borde DURO por-nodo): silueta DILATADA de todos los nodos en UN solo path →
+    // CONTORNO unificado (reemplaza el borde DURO por-nodo): silueta DILATADA de todos los nodos en UN solo path →
     // un único fill oscuro → solo asoma el REBORDE exterior (los cuerpos lo tapan por dentro) = contorno suave, sin líneas internas
     // (VISUAL.md "nada de bordes duros"). Color = tinte oscuro del linaje. LOD: solo nodos visibles. Barato (sin gradiente, 1 fill).
-    if (!halo) {
+    {   // CONTORNO unificado: silueta dilatada de todos los nodos en UN path → un solo fill oscuro = reborde suave
       c.beginPath();
       for (let k = p1 - 1; k >= p0; k--) {
         const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
@@ -312,8 +309,8 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
     for (let k = p1 - 1; k >= p0; k--) {
       const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], tissue = partData[o + 3], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
       const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
-      const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc * mul);
-      if (!halo) { const dx = px - bx, dy = py - by, ext = Math.hypot(dx, dy) + pr; if (ext > bodyR) bodyR = ext;
+      const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc);
+      { const dx = px - bx, dy = py - by, ext = Math.hypot(dx, dy) + pr; if (ext > bodyR) bodyR = ext;
         // CABEZA = nodo más adelantado (proyección sobre el rumbo) + leve preferencia BOCA, donde se anclan los OJOS. Se
         // puntúa con la coord local ADELANTE `lx`·sc, NO con dx·chh+dy·shh: ambas son IGUALES en aritmética real (la
         // ondulación `uy` se cancela al proyectar sobre el rumbo), pero la versión en pantalla arrastra el redondeo sub-ULP
@@ -327,9 +324,8 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
       else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
       // color base del NÚCLEO (per-tejido en modo Tejido; si no, el del agente) → lo usan el relleno Y las costillas
       let nh = bH, ns = bS, nl = bL;
-      if (!halo && colorMode === 'tissue') { const c0 = TCOL_HSL[tissue] || TCOL_HSL[0]; nh = c0[0]; ns = c0[1]; nl = c0[2]; }
-      if (halo) c.fillStyle = agentCol;   // aura: relleno plano (lo suaviza el bloom)
-      else if (pr > Q.lodVol) {   // VOLUMEN: gradiente radial (caro, createRadialGradient) SOLO sobre el umbral de calidad (en 'baja' nunca → plano y barato)
+      if (colorMode === 'tissue') { const c0 = TCOL_HSL[tissue] || TCOL_HSL[0]; nh = c0[0]; ns = c0[1]; nl = c0[2]; }
+      if (pr > Q.lodVol) {   // VOLUMEN: gradiente radial (caro, createRadialGradient) SOLO sobre el umbral de calidad (en 'baja' nunca → plano y barato)
         const lr = rL > pr ? rL : pr;
         const g = c.createRadialGradient(px + LIGHT_DX * pr, py + LIGHT_DY * pr, pr * 0.15, px, py, lr * 1.03);
         g.addColorStop(0, `hsl(${nh | 0},${cl(ns - 12)}%,${cl(nl + 20)}%)`);    // realce
@@ -338,7 +334,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
         c.fillStyle = g;
       } else c.fillStyle = `hsl(${nh | 0},${ns}%,${nl}%)`;
       c.fill();
-      if (natMix && !halo) { const ga = c.globalAlpha; c.globalAlpha = ga * 0.32; c.fillStyle = TCOL[tissue] || '#5a6b7a'; c.fill(); c.globalAlpha = ga; }   // Natural+tejido: tinte SUTIL de la función
+      if (natMix) { const ga = c.globalAlpha; c.globalAlpha = ga * 0.32; c.fillStyle = TCOL[tissue] || '#5a6b7a'; c.fill(); c.globalAlpha = ga; }   // Natural+tejido: tinte SUTIL de la función
       // (el contorno duro por-nodo se sustituyó por el CONTORNO unificado dibujado ANTES del cuerpo → reborde suave)
       // TEXTURA — COSTILLAS transversales (segmentación): curvas combadas hacia la punta, color = SOMBRA del propio cuerpo
       // (anatomía, no motas pegadas), ajustadas al ancho LOCAL de la silueta (sin clip → barato). LOD: solo nodos grandes (al acercar).
@@ -356,7 +352,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
     // pigmento + iris del linaje + GLINT especular hacia la luz de la escena (sin esclera blanca = sin pegatina), dentro de la
     // silueta. Nº y disposición por LINAJE (no siempre 2). La pupila MIRA al estímulo (percepción real, amenaza>presa) o al
     // rumbo en calma, y se aviva/dilata con la cercanía (alert). LOD: se funden al acercar; nada en vista de mundo.
-    if (!halo && headR > Q.lodEye) {
+    if (headR > Q.lodEye) {
       const amt = Math.min(1, Math.max(0, (bodyR - 4) / 14));
       if (amt > 0.02) {
         const alert = aAlert ? aAlert[a] : 0, lh = (ahue[a] * 360) | 0, vv = (ahue[a] * 41.7) % 1;
@@ -382,7 +378,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
       }
     }
   }
-  c.globalAlpha = baseA;
+  c.globalAlpha = 1;
 }
 
 // --- HUD (fps render · t/s sim · pop · tick) + gráfica de población ---
@@ -558,7 +554,7 @@ $('colorMode').addEventListener('change', (e) => { colorMode = e.target.value; b
 $('quality').addEventListener('change', (e) => setQuality(e.target.value));
 function setQuality(q) {
   if (!QUALITY[q]) return; quality = q; Q = QUALITY[q];
-  bloomStrength = RENDER_P.bloom * Q.bloom;       // 'baja' (bloom 0) apaga aura + bloom + plancton + nieve
+  bloomStrength = RENDER_P.bloom * Q.bloom;       // 'baja' (bloom 0) apaga el glow/bloom + plancton + nieve
   snow = null; plankton = null;                    // re-densificar la atmósfera al nuevo nivel (se re-crean en el próximo draw)
   dpr = Math.min(Q.dprCap, window.devicePixelRatio || 1); resize();   // nueva resolución de render (recrea los búferes)
   if (WORLD && frame) draw();                      // redibuja YA (el rAF puede estar throttleado o en pausa)
@@ -616,8 +612,8 @@ function buildLegend() {
   const sets = {
     natural: [['#7fb0d8', 'color = pigmento heredado (linaje)'], ['#e0a84a', 'segmentación = patrón de familia · brillo = energía']],
     natmix: [['#7fb0d8', 'pigmento heredado'], ['#e0a84a', '+ tinte sutil de tejido (función)'], ['#e0a84a', 'segmentación · brillo = energía']],
-    tissue: [['#5a6b7a', 'estructura'], ['#e0664d', 'músculo'], ['#e0a84a', 'boca'], ['#9a7bd0', 'aura = color real (linaje)']],
-    role: [['#3fb98f', 'herbívoro'], ['#e0664d', 'carnívoro'], ['#e0a84a', 'omnívoro'], ['#9a7bd0', 'aura = color real (linaje)'], ['#3fb98f', '(oficio por DIETA real)']],
+    tissue: [['#5a6b7a', 'estructura'], ['#e0664d', 'músculo'], ['#e0a84a', 'boca']],
+    role: [['#3fb98f', 'herbívoro'], ['#e0664d', 'carnívoro'], ['#e0a84a', 'omnívoro'], ['#3fb98f', '(oficio por DIETA real)']],
     lineage: [['#e0664d', 'tono = linaje (color heredado, deriva lenta)']],
   };
   L.innerHTML = (sets[colorMode] || sets.natural).map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('');
