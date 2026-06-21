@@ -6,7 +6,7 @@ import { RENDER_P, START, SIM_P, GENOME_P, WORLD_P, QUALITY } from './config.js'
 
 const worker = new Worker(new URL('./engine/worker.js', import.meta.url), { type: 'module' });
 let WORLD = null, frame = null;
-worker.onmessage = (e) => { const m = e.data; if (m.type === 'world') { WORLD = m; resetCamera(); const sv = document.getElementById('seedVal'); if (sv) sv.textContent = m.seed; } else if (m.type === 'frame') { frame = m; if (m.veg) bakeVeg(m.veg); } };   // el fondo = campo de VEGETACIÓN (llega cada frame; fluye con la luz); 'world' trae la semilla usada → readout
+worker.onmessage = (e) => { const m = e.data; if (m.type === 'world') { WORLD = m; resetCamera(); } else if (m.type === 'frame') { frame = m; if (m.veg) bakeVeg(m.veg); } };   // el fondo = campo de VEGETACIÓN (llega cada frame; fluye con la luz)
 
 const canvas = document.getElementById('world'), ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
@@ -633,11 +633,10 @@ $('tps').addEventListener('input', (e) => {
   syncSpeedUI();
 });
 $('fps').addEventListener('input', (e) => { maxFps = +e.target.value; $('fpsVal').textContent = maxFps + ' fps'; });   // límite de FPS de render
-// B5: Reiniciar usa la semilla del panel (vacío → aleatoria; el worker devuelve la usada y la muestra). El mundo nuevo
-// nace con lightMul=1 → re-aplica el lab.
-function resetWorld() {   // semilla del input (vacío → aleatoria: el worker la elige y la devuelve en 'world' → seedVal). El mundo nuevo nace con lightMul=1 → re-aplica el lab.
-  const sv = $('seed').value.trim();   // texto no numérico → el worker lo trata como aleatoria (+sv = NaN → no finito)
-  worker.postMessage({ type: 'reset', seed: sv === '' ? null : sv, worldSize: +$('worldSize').value, seedCount: +$('seedCount').value, spawnSpread: +$('spawnSpread').value, diversity: +$('diversity').value });
+// B5: Reiniciar re-siembra con semilla SIEMPRE aleatoria (la UI de semilla se quitó; el determinismo sigue interno: el worker
+// elige una semilla y la corrida es reproducible bajo el capó). El mundo nuevo nace con lightMul=1 → re-aplica el lab.
+function resetWorld() {
+  worker.postMessage({ type: 'reset', seed: null, worldSize: +$('worldSize').value, seedCount: +$('seedCount').value, spawnSpread: +$('spawnSpread').value, diversity: +$('diversity').value });
   applyLab(); }
 $('reset').addEventListener('click', resetWorld);
 $('hide').addEventListener('click', () => document.body.classList.add('hidden-panel'));
@@ -662,8 +661,8 @@ $('geneTrait').addEventListener('change', (e) => worker.postMessage({ type: 'his
 worker.postMessage({ type: 'histTrait', key: $('geneTrait').value });
 
 // LABORATORIO — sliders de leyes en vivo. Cada uno manda {set,key,value} al worker (mutación en caliente de SIM_P/mundo).
-const LAB_DEF = { lightMul: 1, lightFlow: WORLD_P.lightFlow, vegGrowth: WORLD_P.vegGrowth, patchiness: WORLD_P.patchiness, grazeRefuge: SIM_P.grazeRefuge, forageReach: SIM_P.forageReach, baseCost: SIM_P.baseCost, reproE: SIM_P.reproE, grazeRate: SIM_P.grazeRate, scavRate: SIM_P.scavRate, fleeSpeed: SIM_P.fleeSpeed, mutRate: GENOME_P.mutRate };   // defaults del lab = config (para "restaurar valores")
-const fmtLab = (k, v) => k === 'lightMul' ? v.toFixed(2) + '×' : (k === 'mutRate' || k === 'fleeSpeed') ? v.toFixed(1) + '×' : (k === 'reproE' || k === 'forageReach') ? v.toFixed(0) : k === 'lightFlow' ? (v * 10000).toFixed(1) : (k === 'grazeRate' || k === 'scavRate' || k === 'vegGrowth' || k === 'patchiness' || k === 'grazeRefuge') ? v.toFixed(2) : v.toFixed(3);
+const LAB_DEF = { lightMul: 1, lightFlow: WORLD_P.lightFlow, vegGrowth: WORLD_P.vegGrowth, patchiness: WORLD_P.patchiness, grazeRefuge: SIM_P.grazeRefuge, forageReach: SIM_P.forageReach, baseCost: SIM_P.baseCost, reproE: SIM_P.reproE, grazeRate: SIM_P.grazeRate, scavRate: SIM_P.scavRate, fleeSpeed: SIM_P.fleeSpeed, fatWeight: SIM_P.fatWeight, senesce: SIM_P.senesce, mutRate: GENOME_P.mutRate };   // defaults del lab = config (para "restaurar valores")
+const fmtLab = (k, v) => k === 'lightMul' ? v.toFixed(2) + '×' : (k === 'mutRate' || k === 'fleeSpeed') ? v.toFixed(1) + '×' : (k === 'reproE' || k === 'forageReach') ? v.toFixed(0) : k === 'lightFlow' ? (v * 10000).toFixed(1) : k === 'senesce' ? (v * 100000).toFixed(1) : (k === 'grazeRate' || k === 'scavRate' || k === 'vegGrowth' || k === 'patchiness' || k === 'grazeRefuge' || k === 'fatWeight') ? v.toFixed(2) : v.toFixed(3);
 const labSliders = [...document.querySelectorAll('.lab-slider')];
 const labOut = (k) => document.querySelector(`output[data-for="${k}"]`);
 function applyLab() { for (const s of labSliders) worker.postMessage({ type: 'set', key: s.dataset.key, value: +s.value }); }

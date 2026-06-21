@@ -28,11 +28,12 @@ function run(ticks) {
   return { c: checksum(s), pop: s.pop(), tick: s.tick };
 }
 
-const GOLDEN = 0x55828375;   // re-fijado 2026-06-21: reproMode='sexual' por DEFAULT (antes 'both') — repro SEXUAL OBLIGADA, sin
-                             // respaldo asexual. Cambio INTENCIONADO de dinámica (pop más baja; el cazador queda más fino — ver m9,
-                             // decisión de usuario de aceptar el ápice más fino). Previos: 0x4bcdaeaa (diversidad inicial del fundador),
-                             // 0xe8984a53 (homología #4), 0xf5375391 (coste boca), 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed).
-                             // seed 1, cap 4000, 800 fundadores, 2000 ticks.
+const GOLDEN = 0x2ccff67c;   // re-fijado 2026-06-21: SENESCENCIA (vejez) + LASTRE DE RESERVAS (adiposidad) ON por DEFAULT —
+                             // senesce=5e-5 (coste metabólico ∝ edad → esperanza de vida finita + recambio + drena acumuladores) y
+                             // fatWeight=0.15 (la energía almacenada pesa → vmax↓; el excedente de presa rica subsidia carroñeros).
+                             // Cambio INTENCIONADO de dinámica (pop ~210, decisión de usuario; el cazador coexiste, ver m9). Previos:
+                             // 0x55828375 (reproMode='sexual'), 0x4bcdaeaa (diversidad inicial), 0xe8984a53 (homología #4),
+                             // 0xf5375391 (coste boca), 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed). seed 1, cap 4000, 800 fund., 2000 ticks.
 const TICKS = 2000;
 console.log('=== Checksum dorado — determinismo + deriva ===\n');
 const a = run(TICKS), b = run(TICKS);

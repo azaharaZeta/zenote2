@@ -112,6 +112,13 @@ export const SIM_P = {
                        // terreno (payoff de talla del herbívoro). 0 = solo su celda. El radio efectivo ∝ talla (mass/forageMassRef).
   forageMassRef: 4,    // NO UI — masa a la que el radio de forrajeo llega al máximo (forageReach); por debajo, proporcional.
   reproMode: 'sexual',   // UI: Reproducción — 'both' (sexual si hay pareja + respaldo asexual) · 'asexual' · 'sexual' (obligada, sin respaldo)
+  senesce: 0.00005,    // UI: Senescencia / vejez (opción B, ficha vejez-senescencia) — coste metabólico extra ∝ EDAD: cost += senesce·age.
+                       // 0 = apagado (inmortales). DEFAULT ON 5e-5 (display 5.0): esperanza de vida finita + recambio generacional, y
+                       // drena a los acumuladores (maxE 4001→~2200) SIN extinguir al cazador. ≥2e-4 colapsa (el ápice es el más sensible).
+  fatWeight: 0.15,     // UI: Lastre de reservas (adiposidad, ficha tejido-adiposo-reserva-energetica) — la energía ALMACENADA "pesa":
+                       // vmax efectiva = vmax / (1 + fatWeight·E/masa). 0 = apagado. DEFAULT ON 0.15: el que atesora se vuelve lento; el
+                       // excedente de presa rica → carroña → SUBSIDIA al gremio carroñero/omnívoro (refuerza la coexistencia del ápice).
+                       // OJO: NO capa el atesoramiento por sí solo (lento = ahorra moveCost); de eso se encarga la senescencia.
   // --- resto (NO UI) ---
   scavRate: 0.5,       // UI: Carroñeo — energía de detrito (detritusE de animales muertos) ingerible por tick ∝ mouthCap. 0 = apagado.
                        // La MISMA boca que pasta y caza también rebaña carroña → carroñeo facultativo emergente.

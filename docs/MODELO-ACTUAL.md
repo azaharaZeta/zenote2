@@ -38,7 +38,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Luz y vegetación:** Luz solar (`lightMul`) · Corriente del abismo (`lightFlow`) · Productividad (`vegGrowth`) · Comida en
   parches (`patchiness`) · Reserva de rebrote (`grazeRefuge`).
 - **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad (`fleeSpeed`).
-- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`, **default `'sexual'`** = sexual OBLIGADA, sin respaldo asexual).
+- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`, **default `'sexual'`** = sexual OBLIGADA, sin respaldo asexual) · **Senescencia (`senesce`, default ON 5e-5)** = coste metabólico ∝ edad → vejez (esperanza de vida finita + recambio, drena acumuladores) · **Lastre de reservas (`fatWeight`, default ON 0.15)** = la energía almacenada pesa (vmax↓) → el excedente de presa rica subsidia carroñeros.
 - **Evolución:** Ritmo de mutación (`mutRate`).
 - NO UI (config): `vegKcoef/vegEcoef/vegDecay/vegSeed/vegDiffuse/forageMassRef`, `massCost/massCostExp`, etc.
 - Arranque (reinicio): Tamaño de mundo, Sembrado inicial, Extensión, Diversidad, + `vegInit` (NO UI).
@@ -89,7 +89,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
   redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
   boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x55828375` — re-fijado por reproMode='sexual' por DEFAULT; cámbialo solo con cambios de física INTENCIONADOS).
+- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x2ccff67c` — re-fijado por SENESCENCIA (`senesce`=5e-5) + LASTRE de reservas (`fatWeight`=0.15) ON por DEFAULT; cámbialo solo con cambios de física INTENCIONADOS).
 - Memoria: `zenote2-animals-only-vegetation`.
 
 ## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)

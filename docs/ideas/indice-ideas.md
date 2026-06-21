@@ -22,9 +22,7 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 
 ## Ideas de usuario (pendientes de procesar)
 > Solo un humano edita esta sección. Texto breve; el detalle se desarrolla al crear la ficha.
-- Analizar implementar Vejez. Tenemos ahora mismo criaturas inmortales, que acumulan energía al infinito.
-- quitar del ui la info de semilla (sin alterar funcionalidad).
-- condensar el ui un poco, y agrupar por contextos desplegables.
+- _(vacío — las pendientes se procesaron a fichas en `docs/ideas/`)_
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
 Emergencia / realismo:

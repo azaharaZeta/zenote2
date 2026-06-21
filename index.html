@@ -37,89 +37,85 @@
         <label>Diversidad inicial <output id="diversityVal"></output></label>
         <input id="diversity" type="range" min="0" max="1" step="0.05" value="1" title="Variación entre los fundadores: 100% = como ahora (tono/fase/cerebro varían); 0% = todos idénticos (la diversidad emergerá sola por mutación).">
       </div>
+    </details>
+
+    <details class="lab">
+      <summary>Simulación</summary>
       <div class="ctrl">
-        <label>Semilla <output id="seedVal"></output></label>
-        <input id="seed" class="seed-in" type="text" inputmode="numeric" placeholder="aleatoria" title="Semilla del generador: la MISMA semilla reproduce el MISMO mundo (determinista). Vacío = aleatoria. Tras reiniciar, aquí arriba se muestra la semilla usada — cópiala para repetir ese mundo.">
+        <label>Velocidad <output id="tpsVal"></output></label>
+        <div class="row">
+          <button id="play" title="Pausa / reanudar (Espacio)">❚❚</button>
+          <input id="tps" type="range" min="0" max="600" step="10" value="60">
+          <button id="max" class="ghost" title="Máxima velocidad">max</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <label>FPS <output id="fpsVal"></output></label>
+        <input id="fps" type="range" min="5" max="120" step="5" value="20" title="Límite de cuadros por segundo del render (no afecta a la simulación)">
       </div>
     </details>
 
-    <div class="ctrl">
-      <label>Velocidad <output id="tpsVal"></output></label>
-      <div class="row">
-        <button id="play" title="Pausa / reanudar (Espacio)">❚❚</button>
-        <input id="tps" type="range" min="0" max="600" step="10" value="60">
-        <button id="max" class="ghost" title="Máxima velocidad">max</button>
+    <details class="lab" open>
+      <summary>Vista</summary>
+      <div class="ctrl">
+        <label>Calidad gráfica</label>
+        <select id="quality" title="Nivel de detalle del render (no afecta a la simulación). Alta = todo (resolución plena, bioluminiscencia, volumen). Media = menos resolución y atmósfera. Baja = móvil/equipos lentos: sin bioluminiscencia ni volumen, siluetas solo de cerca.">
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baja">Baja</option>
+        </select>
       </div>
-    </div>
+      <div class="ctrl">
+        <label>Zoom <output id="zoomVal"></output></label>
+        <input id="zoom" type="range" min="1" max="16" step="0.1" value="1">
+      </div>
+      <div class="ctrl">
+        <label>Colorear por</label>
+        <select id="colorMode">
+          <option value="natural">Natural</option>
+          <option value="role">Oficio</option>
+          <option value="lineage">Linaje</option>
+        </select>
+      </div>
+      <div class="ctrl" id="tissueMixCtrl">
+        <label>Resaltar tipo tejido <output id="tissueMixVal"></output></label>
+        <input id="tissueMix" type="range" min="0" max="1" step="0.05" value="0.5" title="En modo Natural: resalta el TIPO de tejido (estructura/músculo/boca) sobre el color natural. 0 = solo color natural · 1 = solo tejido. El glow conserva siempre el color natural.">
+      </div>
+      <div id="legend" class="legend"></div>
+    </details>
 
-    <div class="ctrl">
-      <label>FPS <output id="fpsVal"></output></label>
-      <input id="fps" type="range" min="5" max="120" step="5" value="20" title="Límite de cuadros por segundo del render (no afecta a la simulación)">
-    </div>
-
-    <div class="ctrl">
-      <label>Calidad gráfica</label>
-      <select id="quality" title="Nivel de detalle del render (no afecta a la simulación). Alta = todo (resolución plena, bioluminiscencia, volumen). Media = menos resolución y atmósfera. Baja = móvil/equipos lentos: sin bioluminiscencia ni volumen, siluetas solo de cerca.">
-        <option value="alta">Alta</option>
-        <option value="media">Media</option>
-        <option value="baja">Baja</option>
-      </select>
-    </div>
-
-    <div class="ctrl">
-      <label>Zoom <output id="zoomVal"></output></label>
-      <input id="zoom" type="range" min="1" max="16" step="0.1" value="1">
-    </div>
-
-    <div class="ctrl">
-      <label>Colorear por</label>
-      <select id="colorMode">
-        <option value="natural">Natural</option>
-        <option value="role">Oficio</option>
-        <option value="lineage">Linaje</option>
-      </select>
-    </div>
-
-    <div class="ctrl" id="tissueMixCtrl">
-      <label>Resaltar tipo tejido <output id="tissueMixVal"></output></label>
-      <input id="tissueMix" type="range" min="0" max="1" step="0.05" value="0.5" title="En modo Natural: resalta el TIPO de tejido (estructura/músculo/boca) sobre el color natural. 0 = solo color natural · 1 = solo tejido. El glow conserva siempre el color natural.">
-    </div>
-
-    <div id="legend" class="legend"></div>
-
-    <div class="ctrl">
-      <label>Población <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
-      <canvas id="popChart" class="chart" width="226" height="56"></canvas>
-    </div>
-
-    <div class="ctrl">
-      <label>Nacimientos <span class="cl-asex">asexual</span> · <span class="cl-sex">sexual</span></label>
-      <canvas id="birthChart" class="chart" width="226" height="44"></canvas>
-    </div>
-
-    <div class="ctrl">
-      <label>Muertes <span class="cl-pred">depredación</span> · <span class="cl-starv">inanición</span></label>
-      <canvas id="deathChart" class="chart" width="226" height="44"></canvas>
-    </div>
-
-    <div class="ctrl">
-      <label>Talla media <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
-      <canvas id="massChart" class="chart" width="226" height="44" title="Masa media por oficio en el tiempo → ver la talla evolucionar y divergir entre nichos."></canvas>
-    </div>
-
-    <div class="ctrl">
-      <label>Histograma <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
-      <select id="geneTrait" title="Rasgo a distribuir: mira cómo deriva en el tiempo (prueba visual de la selección) y cómo difiere por oficio.">
-        <option value="mass">masa (talla)</option>
-        <option value="mouthCap">boca (ingesta)</option>
-        <option value="vmax">velocidad máx</option>
-        <option value="nParts">nº de partes</option>
-        <option value="reproK">umbral de cría (r/K)</option>
-        <option value="investFrac">inversión por cría</option>
-        <option value="hue">linaje (color)</option>
-      </select>
-      <canvas id="geneChart" class="chart" width="226" height="56"></canvas>
-    </div>
+    <details class="lab">
+      <summary>Métricas</summary>
+      <div class="ctrl">
+        <label>Población <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
+        <canvas id="popChart" class="chart" width="226" height="56"></canvas>
+      </div>
+      <div class="ctrl">
+        <label>Nacimientos <span class="cl-asex">asexual</span> · <span class="cl-sex">sexual</span></label>
+        <canvas id="birthChart" class="chart" width="226" height="44"></canvas>
+      </div>
+      <div class="ctrl">
+        <label>Muertes <span class="cl-pred">depredación</span> · <span class="cl-starv">inanición</span></label>
+        <canvas id="deathChart" class="chart" width="226" height="44"></canvas>
+      </div>
+      <div class="ctrl">
+        <label>Talla media <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
+        <canvas id="massChart" class="chart" width="226" height="44" title="Masa media por oficio en el tiempo → ver la talla evolucionar y divergir entre nichos."></canvas>
+      </div>
+      <div class="ctrl">
+        <label>Histograma <span class="cl-auto">herbívoro</span> · <span class="cl-het">carnívoro</span></label>
+        <select id="geneTrait" title="Rasgo a distribuir: mira cómo deriva en el tiempo (prueba visual de la selección) y cómo difiere por oficio.">
+          <option value="mass">masa (talla)</option>
+          <option value="mouthCap">boca (ingesta)</option>
+          <option value="vmax">velocidad máx</option>
+          <option value="nParts">nº de partes</option>
+          <option value="reproK">umbral de cría (r/K)</option>
+          <option value="investFrac">inversión por cría</option>
+          <option value="hue">linaje (color)</option>
+        </select>
+        <canvas id="geneChart" class="chart" width="226" height="56"></canvas>
+      </div>
+    </details>
 
     <details class="lab">
       <summary>Laboratorio · leyes en vivo</summary>
@@ -179,6 +175,14 @@
           <label style="flex:0"><input id="reproSex" type="checkbox" checked> sexual</label>
           <label style="flex:0"><input id="reproAsex" type="checkbox" checked> asexual</label>
         </div>
+      </div>
+      <div class="ctrl">
+        <label>Senescencia (vejez) <output data-for="senesce"></output></label>
+        <input class="lab-slider" data-key="senesce" type="range" min="0" max="0.00015" step="0.000005" value="0.00005" title="Vejez: coste metabólico extra que CRECE con la edad (cost += senesce·edad) → los viejos gastan más y mueren por inanición → recambio generacional + esperanza de vida finita, y drena a los acumuladores inmortales de energía. 0 = apagado (criaturas inmortales). Medido: ~5 = la vejez muerde sin tocar al carnívoro; ~10 recambio más fuerte (ápice se adelgaza); ≥20 colapsa (cazador se extingue). El cazador (ápice) es el más sensible a la mortalidad extra.">
+      </div>
+      <div class="ctrl">
+        <label>Lastre de reservas <output data-for="fatWeight"></output></label>
+        <input class="lab-slider" data-key="fatWeight" type="range" min="0" max="0.3" step="0.01" value="0.15" title="Adiposidad (experimental): la energía ALMACENADA pesa → quien atesora reservas se vuelve más lento (vmax ÷ (1 + lastre·E/masa)). 0 = apagado. Súbelo para que guardar energía cueste movilidad → la selección debería autolimitar el atesoramiento (trade-off forrajear↔almacenar). Muerde sobre todo bajo presión de velocidad (escape/caza).">
       </div>
 
       <div class="lab-group">Evolución</div>

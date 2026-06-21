@@ -13,7 +13,7 @@ function totalStored(s) { let g = 0; for (let i = 0; i < s.cap; i++) if (s.alive
 
 console.log('=== A1 — conservación bajo SATURACIÓN del pool ===\n');
 
-const CAP = 250, TICKS = 4000;   // cap << capacidad de carga (~750) → el pool se satura y se mantiene lleno
+const CAP = 150, TICKS = 4000;   // cap << capacidad de carga (~210 con los defaults senescencia+lastre) → el pool se satura y se mantiene lleno
 const w = new World(1500, 1, { ...WORLD_P, lightBase: 2.5 });
 w.nutrient.fill(1.5); w.veg.fill(1.0);
 const s = new Sim(w, { seed: 1, cap: CAP }); s.seed(300);   // seed > cap → arranca lleno

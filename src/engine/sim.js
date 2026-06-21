@@ -200,7 +200,10 @@ export class Sim {
 
       // ---- MOVIMIENTO desde las salidas (0,1 dirección · 2 throttle); coste ∝ drag·v² ----
       const dxo = out[0], dyo = out[1], dm = Math.sqrt(dxo * dxo + dyo * dyo), throttle = (out[2] + 1) * 0.5;
-      if (dm > 1e-3) { const sp = this.vmax[i] * throttle; vx[i] = dxo / dm * sp; vy[i] = dyo / dm * sp; } else { vx[i] *= 0.5; vy[i] *= 0.5; }
+      // V2 — ADIPOSIDAD: la energía almacenada PESA → lastre ∝ reserva específica (E/masa) que recorta la vmax efectiva. fatWeight=0
+      // (default) → vmaxEff = vmax → dinámica idéntica (dorado neutro). Ver ficha tejido-adiposo-reserva-energetica.md.
+      const vmaxEff = P.fatWeight > 0 ? this.vmax[i] / (1 + P.fatWeight * E[i] / (this.mass[i] + 1e-6)) : this.vmax[i];
+      if (dm > 1e-3) { const sp = vmaxEff * throttle; vx[i] = dxo / dm * sp; vy[i] = dyo / dm * sp; } else { vx[i] *= 0.5; vy[i] *= 0.5; }
       let nx = x[i] + vx[i], ny = y[i] + vy[i]; if (nx < 0) nx += size; else if (nx >= size) nx -= size; if (ny < 0) ny += size; else if (ny >= size) ny -= size; x[i] = nx; y[i] = ny;
       const v2 = vx[i] * vx[i] + vy[i] * vy[i];
 
@@ -256,7 +259,10 @@ export class Sim {
 
       // METABOLISMO: reservas → calor (basal + ∝masa + nado). Muerte si se agotan → cuerpo a detrito.
       const mC = P.massCostExp === 1 ? this.mass[i] : Math.pow(this.mass[i], P.massCostExp);   // BALANCE: coste de masa super-lineal (exp>1 frena el bloat)
-      const cost = P.baseCost + P.massCost * mC + P.moveCost * v2 * this.drag[i] + P.mouthCost * this.mouthCap[i];   // +mantenimiento de la boca (∝mouthCap) → boca bajo selección
+      // VEJEZ / SENESCENCIA (opción B): coste metabólico que CRECE con la edad (∝ age) → los viejos gastan más → mueren por la vía
+      // de INANICIÓN de abajo (conserva gratis, reutiliza el camino a detrito) y de paso DRENA a los acumuladores inmortales.
+      // senesce=0 (default) → término 0 → dinámica idéntica (dorado intacto). Ver ficha vejez-senescencia.md.
+      const cost = P.baseCost + P.massCost * mC + P.moveCost * v2 * this.drag[i] + P.mouthCost * this.mouthCap[i] + P.senesce * this.age[i];   // +mantenimiento de la boca (∝mouthCap) → boca bajo selección; +senescencia (∝edad)
       const spend = Math.min(E[i], cost); E[i] -= spend; W.heat += spend;
       if (E[i] <= 1e-6) { W.detritusM[cell] += this.mass[i]; W.detritusE[cell] += (E[i] > 0 ? E[i] : 0) + this.gut[i] + this.mass[i] * this.eD; this._recordCorpse(i); this.alive[i] = 0; this.free[this.freeTop++] = i; this.genome[i] = null; this.starved++; continue; }
 
