@@ -18,7 +18,7 @@ const SENSE_R = 120;   // alcance (u) para la INTENSIDAD visual de la PERCEPCIÓ
 export class Sim {
   constructor(world, { seed = 1, cap = 8000, eDensity = SIM_P.eDensity, randomBehavior = false, freezeBrain = false } = {}) {
     resetHom();   // marcas de homología limpias por mundo (no arrastrar el contador entre instancias/procesos; ver genome.js)
-    this.world = world; this.cap = cap; this.rng = makeRng(seed); this.tick = 0; this.eD = eDensity;
+    this.world = world; this.cap = cap; this.rng = makeRng(seed); this.rngSeed = seed; this.tick = 0; this.eD = eDensity;   // rngSeed: semilla cruda (≠ método seed()) → tono base de linaje
     this.randomBehavior = randomBehavior;   // control: salidas aleatorias (ignora el cerebro) → mide si la conducta neuronal es ADAPTATIVA
     // control M6.3: cerebro CONGELADO a un seedBrain canónico (sin mutación, recombinación ni plasticidad del cerebro;
     // la morfología SÍ evoluciona). Aísla la conducta SEMBRADA de la aportación de la evolución/aprendizaje del cerebro.
@@ -102,8 +102,12 @@ export class Sim {
   // de radio spread·mundo/2). div = diversidad inicial (1 = normal · 0 = founders idénticos). Orden RNG: genoma → x → y
   // (idéntico al actual) → spread=1 & div=1 es byte-idéntico.
   seed(n, spread = 1, div = 1) { const W = this.world, rng = this.rng, S = W.size, c = S * 0.5;
+    // TONO DE LINAJE de arranque: ALEATORIO por mundo pero COMPARTIDO por todos los fundadores → a div=0 todos el MISMO color
+    // (aleatorio, NO fijo); a div>0 se dispersa por el círculo. Sale de un RNG APARTE derivado de la semilla → NO consume el rng
+    // dinámico → el dorado NO se mueve (la hue es render-only, no la lee la dinámica). Mismo seed → mismo color (reproducible).
+    const baseHue = this.rngSeed == null ? Math.random() : makeRng(((this.rngSeed >>> 0) ^ 0x9e3779b9) >>> 0).next();
     for (let k = 0; k < n; k++) {
-      const g = makeFounder(rng, div);
+      const g = makeFounder(rng, div, baseHue);
       let x, y;
       if (spread >= 1) { x = rng.next() * S; y = rng.next() * S; }                                  // uniforme (actual)
       else { const ang = rng.next() * 6.283185307, rr = spread * c * Math.sqrt(rng.next()); x = c + Math.cos(ang) * rr; y = c + Math.sin(ang) * rr; }   // disco central

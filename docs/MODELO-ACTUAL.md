@@ -42,6 +42,11 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Evolución:** Ritmo de mutación (`mutRate`).
 - NO UI (config): `vegKcoef/vegEcoef/vegDecay/vegSeed/vegDiffuse/forageMassRef`, `massCost/massCostExp`, etc.
 - Arranque (reinicio): Tamaño de mundo, Sembrado inicial, Extensión, Diversidad, + `vegInit` (NO UI).
+  **Diversidad inicial** (`START.diversity`, slider): 0 = fundadores CLONES byte-idénticos · 1 = fundadores DIVERSOS — `makeFounder`
+  perturba morfología (talla/proporciones/aletas/oscilación) + r/K ∝ div, con TEJIDOS FIJOS (raíz=boca, módulo=músculo) como suelo
+  de viabilidad (todo fundador come y se mueve). El TONO de linaje es ALEATORIO por mundo (a div=0 todos el MISMO color random,
+  reproducible por semilla — sale de un RNG aparte, no toca el dorado; a div>0 se dispersa). La complejidad ESTRUCTURAL (más
+  módulos, recursión) sigue emergiendo por mutación.
 - El worker `set` acepta claves de SIM_P, GENOME_P (mutRate), `world.lightMul` y cualquier clave de `world.P` (lightFlow/vegGrowth/patchiness…) → afectan en vivo.
 
 ## Render y observación
@@ -79,7 +84,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
   redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
   boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0xe8984a53` — re-fijado por la HOMOLOGÍA COMPARTIDA del módulo fundador, #4; cámbialo solo con cambios de física INTENCIONADOS).
+- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x4bcdaeaa` — re-fijado por la DIVERSIDAD INICIAL del fundador, que perturba morfología + r/K ∝ div; cámbialo solo con cambios de física INTENCIONADOS).
 - Memoria: `zenote2-animals-only-vegetation`.
 
 ## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)

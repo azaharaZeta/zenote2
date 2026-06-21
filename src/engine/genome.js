@@ -75,19 +75,24 @@ function mkModule(rng) {
 // Fundador SIMPLE = ANIMAL grazer (la complejidad EMERGE): cabeza con BOCA (pasta vegetación) + un par bilateral de MÚSCULO
 // (aletas que propulsan → puede moverse a buscar comida). tissueOf con TISSUE_N=3 (t·3|0): <0.333 STRUCTURE · 0.333-0.667
 // MUSCLE · ≥0.667 MOUTH. Desde aquí emergen herbívoros (boca chica, pastan) y carnívoros (boca grande, cazan).
-export function makeFounder(rng, div = 1) {
-  // div = DIVERSIDAD inicial (1 = normal, byte-idéntico · 0 = todos idénticos). Mezcla las partes variables (fase/tono/
-  // cerebro) hacia un valor fijo (0.5) con `div`; consume el MISMO RNG (a div=1 el valor es exactamente rng.next()).
+export function makeFounder(rng, div = 1, baseHue = 0.5) {
+  // div = DIVERSIDAD inicial: 0 = todos los fundadores IDÉNTICOS (clones) · 1 = variación amplia (talla/proporciones/aletas/r-K).
+  // Dos perturbadores, AMBOS ∝ div y que consumen el MISMO RNG sea cual sea div (a div=0 la perturbación es 0 → genes idénticos
+  // pero el stream avanza igual → determinista): `dv(x)` mezcla un [0,1] hacia 0.5 (fase/tono); `jig` añade ruido gaussiano acotado
+  // a un gen morfológico continuo. SUELO DE VIABILIDAD: los TEJIDOS quedan FIJOS (raíz=BOCA, módulo=MÚSCULO) y el músculo conserva
+  // algo de oscilación → todo fundador puede COMER y MOVERSE aunque su forma/r-K varíen. La complejidad ESTRUCTURAL (más módulos,
+  // recursión, ramas) EMERGE por mutación, no se siembra. (Antes: solo variaban fase/tono/cerebro; la morfología era fija.)
   const dv = (x) => 0.5 + (x - 0.5) * div;
+  const jig = (base, amp, lo, hi) => { const v = base + rng.gaussian() * amp * div; return v < lo ? lo : v > hi ? hi : v; };
+  const P = GENOME_P;
   return {
-    root: { size: 0.42, aspect: 0.4, tissue: 0.8 /*MOUTH*/, oscAmp: 0.1, phase: dv(rng.next()) },
-    modules: [{ angle: 2.8, size: 0.35, aspect: 0.6, tissue: 0.5 /*MUSCLE*/, oscAmp: 0.4, phase: dv(rng.next()),
-                recursive: false, recLimit: 1, symmetric: true, taper: 0.85, hom: FOUNDER_HOM }],   // par de aletas: marca COMPARTIDA → recombinación homóloga entre linajes
+    root: { size: jig(0.42, 0.18, 0.12, 0.95), aspect: jig(0.4, 0.22, 0, 1), tissue: 0.8 /*MOUTH (fijo: viabilidad — comer)*/, oscAmp: jig(0.1, 0.12, 0, 0.6), phase: dv(rng.next()) },
+    modules: [{ angle: jig(2.8, 0.5, 0.3, Math.PI), size: jig(0.35, 0.16, 0.12, 0.8), aspect: jig(0.6, 0.22, 0, 1), tissue: 0.5 /*MUSCLE (fijo: viabilidad — moverse)*/, oscAmp: jig(0.4, 0.18, 0.05, 0.9), phase: dv(rng.next()),
+                recursive: false, recLimit: 1, symmetric: true, taper: jig(0.85, 0.12, 0.5, 1), hom: FOUNDER_HOM }],   // par de aletas: marca COMPARTIDA → recombinación homóloga entre linajes
     brain: seedBrain(rng, div),   // bootstrap de conducta competente; div escala el ruido (div=0 → cerebro idéntico)
-    hue: dv(rng.next()),          // marcador de LINAJE (neutro, heredable, deriva lenta); a div=0 todos el mismo tono
-    // r/K: genes de historia de vida. TODOS los fundadores arrancan IDÉNTICOS (reproK=1, investFrac=0.4375 = defaults previos)
-    // → la divergencia r↔K es 100% emergente (mutación+selección), no sembrada. No consumen RNG ni dependen de div.
-    reproK: 1.0, investFrac: 0.4375,
+    hue: (baseHue + (rng.next() - 0.5) * div + 1) % 1,   // LINAJE (render-only, heredable): a div=0 todos = baseHue (mismo color ALEATORIO por mundo) · a div=1 disperso por todo el círculo
+    // r/K: historia de vida. Antes FIJOS; ahora varían ∝ div dentro de su rango (GENOME_P) → diversidad de estrategia desde t=0.
+    reproK: jig(1.0, 0.3, P.reproKMin, P.reproKMax), investFrac: jig(0.4375, 0.12, P.investFracMin, P.investFracMax),
   };
 }
 
