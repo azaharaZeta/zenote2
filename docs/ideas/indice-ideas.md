@@ -23,8 +23,8 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 ## Ideas de usuario (pendientes de procesar)
 > Solo un humano edita esta sección. Texto breve; el detalle se desarrolla al crear la ficha.
 
-_(Sin ideas sin procesar ahora. Las tres anteriores pasaron a ficha propia: `diversidad-inicial-viabilidad.md` ·
-`ventana-inspector-organismo.md` · `colorear-por-simplificacion.md`.)_
+_(Sin ideas sin procesar ahora. En análisis (ficha en `docs/ideas/`): `diversidad-inicial-viabilidad.md` ·
+`ventana-inspector-organismo.md`. Implementada y archivada: `archivo/colorear-por-simplificacion.md`.)_
 ---
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)

@@ -22,7 +22,8 @@ export const RENDER_P = {
   maxFps: 20,          // UI: FPS — límite de dibujos por segundo (no afecta a la sim)
   bloom: 0.75,         // UI: Bioluminiscencia — intensidad del glow/bloom (0 = apagado; recomendado en móvil/Baja)
   zoom: 1,             // UI: Zoom — zoom inicial
-  colorMode: 'natural',// UI: Colorear por — modo inicial (natural · natmix · tissue · role · lineage)
+  colorMode: 'natural',// UI: Colorear por — modo inicial (natural · role · lineage)
+  tissueMix: 0.5,      // UI: Resaltar tipo tejido — en modo 'natural', mezcla del color del cuerpo entre natural (0) y tejido/función (1). El glow conserva SIEMPRE el natural.
   quality: 'alta',     // UI: Calidad gráfica — preset de LOD/resolución/atmósfera (alta · media · baja); 'baja' = móvil/equipos lentos
   zoomMin: 1, zoomMax: 16,   // NO UI — límites del zoom (mín. 1 = el mundo entero cabe)
   dprCap: 2,           // NO UI — tope de devicePixelRatio. Hoy lo fija el preset de QUALITY (dprCap por nivel); se conserva como referencia del nivel 'alta'.

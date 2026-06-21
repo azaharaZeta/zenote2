@@ -49,7 +49,8 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - Organismos: **siluetas bézier por nodo** (gota/aleta/tentáculo que afila hacia afuera según `aspect` → criaturas, no óvalos)
   con **sombreado volumétrico** (gradiente radial luz→sombra al acercar → gelatina 3D; LOD: plano a vista de mundo), **costillas
   transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde = el color del linaje OSCURECIDO, no negro; sin líneas duras).
-  Color por modo (Natural=linaje · Tejido · **Oficio**=herbívoro/carnívoro/omnívoro por dieta · Linaje). Ojos = fracción carnívora
+  Color por modo (**Natural**=linaje + slider «Resaltar tipo tejido» 0→1 (0 solo natural · 1 solo tejido) — el GLOW conserva SIEMPRE
+  el natural, nunca el del tejido · **Oficio**=herbívoro/carnívoro/omnívoro por dieta · Linaje). Ojos = fracción carnívora
   de la dieta. Cadáveres con forma que se desvanecen. Inspector: dieta "pasto/caza/carroña" + linaje + r/K (umbral·inversión).
 - **Abismo vivo:** nebulosa de vegetación TEAL con **profundidad** (campo frío↔cálido fundido en el bake) + **plancton/micro-flora**
   (chispas que florecen donde hay veg) + **nieve marina** (detrito a la deriva que titila) bajo los organismos → profundidad y vida.

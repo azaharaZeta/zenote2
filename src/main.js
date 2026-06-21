@@ -73,8 +73,7 @@ function wrap(v) { const S = WORLD.size; return ((v % S) + S) % S; }
 
 const TCOL = [ '#5a6b7a', '#e0664d', '#e0a84a' ];   // STRUCTURE, MUSCLE, MOUTH (índice = tissue)
 const RCOL = [ '#3fb98f', '#e0664d', '#e0a84a' ];   // rol (por dieta): 0 herbívoro · 1 carnívoro · 2 omnívoro
-// Equivalentes HSL [h,s,l] de TCOL/RCOL → para el SOMBREADO VOLUMÉTRICO (necesita el color numérico para derivar luz/sombra).
-const TCOL_HSL = [ [208, 15, 42], [10, 70, 59], [38, 71, 58] ];
+// Equivalente HSL [h,s,l] de RCOL → para el SOMBREADO VOLUMÉTRICO del modo Oficio (necesita el color numérico para derivar luz/sombra).
 const RCOL_HSL = [ [159, 49, 49], [10, 70, 59], [38, 71, 58] ];
 const ROLE_TXT = [ 'herbívoro', 'carnívoro', 'omnívoro' ];
 const LIGHT_DX = -0.42, LIGHT_DY = -0.5;   // dirección de luz (pantalla, arriba-izq) → el realce del gradiente cae hacia ahí en TODOS los nodos = escena coherente
@@ -157,7 +156,7 @@ function silPath(c, cx, cy, rot, L, wB, wT, append) {
   c.bezierCurveTo(X(L * 0.5, -wT), Y(L * 0.5, -wT), X(-L * 0.5, -wB), Y(-L * 0.5, -wB), X(-L, 0), Y(-L, 0));
   c.closePath();
 }
-let colorMode = RENDER_P.colorMode;
+let colorMode = RENDER_P.colorMode, tissueMix = RENDER_P.tissueMix;   // tissueMix: nivel de tinte de tejido en modo 'natural' (slider, render puro)
 
 function draw() {
   const t = performance.now() / 1000;
@@ -196,7 +195,7 @@ function draw() {
   // pegada, no como luz; ahora SOLO glow.) El slider de bioluminiscencia controla su intensidad; 0 = apagado (Baja/móvil).
   glowCtx.clearRect(0, 0, cw, ch);
   glowCtx.globalCompositeOperation = 'source-over'; glowCtx.globalAlpha = 1;
-  for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t, false);
+  for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t);
 
   // A4 — BLOOM: reduce glowCv a una miniatura y la reescala ADITIVA sobre el fondo (luz que sangra). 0 = apagado. El factor de
   // reducción ESCALA con el zoom (bd = BLOOM_DIV·zoom) → el glow es una fracción ~constante del organismo a cualquier zoom (con
@@ -221,6 +220,10 @@ function draw() {
     ctx.drawImage(src, 0, 0, w, h, 0, 0, cw, ch);   // salto final a pantalla (de un búfer ya suave → sin rejilla)
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
+  // TINTE DE TEJIDO (solo modo Natural, slider «Resaltar tipo tejido»): se superpone a glowCv DESPUÉS del bloom → el GLOW queda
+  // SIEMPRE con el color natural (linaje), nunca con el del tejido; el cuerpo NÍTIDO (drawImage de glowCv, abajo) sí lo muestra.
+  if (colorMode === 'natural' && tissueMix > 0)
+    for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawTissueTint(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t);
   // organismos NÍTIDOS encima
   ctx.imageSmoothingEnabled = false; ctx.drawImage(glowCv, 0, 0, cw, ch); ctx.imageSmoothingEnabled = true;
 
@@ -283,10 +286,8 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
     const h = ah[a], chh = Math.cos(h), shh = Math.sin(h), spd = aspd[a], p0 = partOff[a], p1 = partOff[a + 1];
     // A2 — VITALIDAD: los hambrientos se atenúan (la muerte se ve venir). energía 0..1 → alpha 0.35..1.
     c.globalAlpha = aE ? 0.35 + 0.65 * aE[a] : 1;
-    // A2 — COLOR DEL NÚCLEO según el modo: 'natural'/'natmix' = pigmento heredado (linaje); 'tissue' = por tejido (anatomía);
-    // 'role' = oficio (dieta); 'lineage' = tono de linaje. El brillo ∝ energía (los hambrientos se atenúan); el glow lo da el bloom.
-    const natMix = colorMode === 'natmix';   // 'Natural + tejido': pigmento de linaje con un tinte sutil de la función
-    // base HSL numérico del NÚCLEO para el SOMBREADO VOLUMÉTRICO: natural/natmix/lineage = linaje · role = oficio · tissue = por nodo (abajo)
+    // A2 — COLOR DEL NÚCLEO según el modo: 'natural'/'lineage' = pigmento heredado (linaje) · 'role' = oficio (dieta). Brillo ∝
+    // energía (los hambrientos se atenúan); el glow lo da el bloom. En 'natural', el TINTE de tejido se superpone DESPUÉS del bloom (drawTissueTint).
     let bH = ahue[a] * 360, bS = 62, bL = 54;
     if (colorMode === 'role') { const c0 = RCOL_HSL[arole[a]] || RCOL_HSL[0]; bH = c0[0]; bS = c0[1]; bL = c0[2]; }
     else if (colorMode === 'lineage') { bS = 58; bL = 58; }
@@ -325,9 +326,8 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
       const rL = pr * (1 + aspect * 1.4), wB = pr * (1 + aspect * 0.15), wT = pr * (1 - aspect * 0.85);
       if (rL > Q.lodSil) silPath(c, px, py, h + dir, rL, wB, wT);   // LOD: silueta bézier; por debajo del umbral de calidad, punto plano
       else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
-      // color base del NÚCLEO (per-tejido en modo Tejido; si no, el del agente) → lo usan el relleno Y las costillas
+      // color base del NÚCLEO = el del modo (linaje / oficio) → lo usan el relleno Y las costillas
       let nh = bH, ns = bS, nl = bL;
-      if (colorMode === 'tissue') { const c0 = TCOL_HSL[tissue] || TCOL_HSL[0]; nh = c0[0]; ns = c0[1]; nl = c0[2]; }
       if (pr > Q.lodVol) {   // VOLUMEN: gradiente radial (caro, createRadialGradient) SOLO sobre el umbral de calidad (en 'baja' nunca → plano y barato)
         const lr = rL > pr ? rL : pr;
         const g = c.createRadialGradient(px + LIGHT_DX * pr, py + LIGHT_DY * pr, pr * 0.15, px, py, lr * 1.03);
@@ -337,8 +337,8 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
         c.fillStyle = g;
       } else c.fillStyle = `hsl(${nh | 0},${ns}%,${nl}%)`;
       c.fill();
-      if (natMix) { const ga = c.globalAlpha; c.globalAlpha = ga * 0.32; c.fillStyle = TCOL[tissue] || '#5a6b7a'; c.fill(); c.globalAlpha = ga; }   // Natural+tejido: tinte SUTIL de la función
       // (el contorno duro por-nodo se sustituyó por el CONTORNO unificado dibujado ANTES del cuerpo → reborde suave)
+      // (el TINTE de tejido del modo Natural NO se pinta aquí: va en drawTissueTint, tras el bloom → el glow no se tiñe)
       // TEXTURA — COSTILLAS transversales (segmentación): curvas combadas hacia la punta, color = SOMBRA del propio cuerpo
       // (anatomía, no motas pegadas), ajustadas al ancho LOCAL de la silueta (sin clip → barato). LOD: solo nodos grandes (al acercar).
       if (bandN > 1 && pr > Q.lodRib) {
@@ -379,6 +379,30 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
         }
         c.globalAlpha = ga0;
       }
+    }
+  }
+  c.globalAlpha = 1;
+}
+
+// TINTE DE TEJIDO (modo Natural): superpone el color de la FUNCIÓN (TCOL por tejido) sobre los cuerpos ya pintados en glowCv,
+// con alpha = «Resaltar tipo tejido» × desvanecido-por-energía (0 = nada → color natural · 1 = opaco → solo tejido). Se llama
+// DESPUÉS del bloom (en draw) → el GLOW nunca lleva color de tejido. Reusa la geometría de nodo (misma ondulación que drawOrgs).
+function drawTissueTint(c, oX, oY, sc, t) {
+  const { n, ax, ay, ah, aspd, aE, partOff, partData } = frame;
+  for (let a = 0; a < n; a++) {
+    const wx = ax[a], wy = ay[a], bx = oX + wx * sc, by = oY + wy * sc;
+    if (bx < -40 || bx > cw + 40 || by < -40 || by > ch + 40) continue;
+    const h = ah[a], chh = Math.cos(h), shh = Math.sin(h), spd = aspd[a], p0 = partOff[a], p1 = partOff[a + 1];
+    const aBase = (aE ? 0.35 + 0.65 * aE[a] : 1) * tissueMix;   // respeta el desvanecido por energía + el nivel del slider
+    for (let k = p1 - 1; k >= p0; k--) {
+      const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], tissue = partData[o + 3], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
+      const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
+      const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc);
+      const rL = pr * (1 + aspect * 1.4);
+      c.globalAlpha = aBase; c.fillStyle = TCOL[tissue] || '#5a6b7a';
+      if (rL > Q.lodSil) silPath(c, px, py, h + dir, rL, pr * (1 + aspect * 0.15), pr * (1 - aspect * 0.85));
+      else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
+      c.fill();
     }
   }
   c.globalAlpha = 1;
@@ -523,7 +547,7 @@ const $ = (id) => document.getElementById(id);
 // los inits de display y del bucle del laboratorio (que leen .value).
 $('worldSize').value = START.worldSize; $('seedCount').value = START.seedCount; $('spawnSpread').value = START.spawnSpread; $('diversity').value = START.diversity;
 $('tps').value = RENDER_P.tps; $('fps').value = RENDER_P.maxFps; $('zoom').value = RENDER_P.zoom;
-$('colorMode').value = RENDER_P.colorMode; $('quality').value = RENDER_P.quality;
+$('colorMode').value = RENDER_P.colorMode; $('quality').value = RENDER_P.quality; $('tissueMix').value = RENDER_P.tissueMix;
 $('reproSex').checked = SIM_P.reproMode !== 'asexual'; $('reproAsex').checked = SIM_P.reproMode !== 'sexual';   // both→ambos · asexual→solo asex · sexual→solo sex
 { const src = { lightFlow: WORLD_P.lightFlow, vegGrowth: WORLD_P.vegGrowth, patchiness: WORLD_P.patchiness, grazeRefuge: SIM_P.grazeRefuge, forageReach: SIM_P.forageReach, baseCost: SIM_P.baseCost, reproE: SIM_P.reproE, grazeRate: SIM_P.grazeRate, scavRate: SIM_P.scavRate, fleeSpeed: SIM_P.fleeSpeed, mutRate: GENOME_P.mutRate };
   for (const s of document.querySelectorAll('.lab-slider')) if (s.dataset.key in src) s.value = src[s.dataset.key]; }
@@ -551,7 +575,11 @@ function resetWorld() {   // semilla del input (vacío → aleatoria: el worker 
 $('reset').addEventListener('click', resetWorld);
 $('hide').addEventListener('click', () => document.body.classList.add('hidden-panel'));
 $('show').addEventListener('click', () => document.body.classList.remove('hidden-panel'));
-$('colorMode').addEventListener('change', (e) => { colorMode = e.target.value; buildLegend(); });
+$('colorMode').addEventListener('change', (e) => { colorMode = e.target.value; $('tissueMixCtrl').hidden = colorMode !== 'natural'; buildLegend(); });
+// Nivel de tejido (solo modo Natural): tiñe el cuerpo con el color de su función según el slider. Render puro (no va al worker).
+$('tissueMix').addEventListener('input', (e) => { tissueMix = +e.target.value; $('tissueMixVal').textContent = Math.round(tissueMix * 100) + '%'; });
+$('tissueMixVal').textContent = Math.round(tissueMix * 100) + '%';
+$('tissueMixCtrl').hidden = colorMode !== 'natural';
 // CALIDAD gráfica (render PURO): cambia el preset de LOD/resolución/atmósfera en vivo. Reaplica dpr (vía resize), bloom y la
 // densidad de plancton/nieve. No envía nada al worker → la simulación es byte-idéntica (el dorado no se mueve).
 $('quality').addEventListener('change', (e) => setQuality(e.target.value));
@@ -613,9 +641,7 @@ window.addEventListener('keydown', (e) => {
 function buildLegend() {
   const L = $('legend');
   const sets = {
-    natural: [['#7fb0d8', 'color = pigmento heredado (linaje)'], ['#e0a84a', 'segmentación = patrón de familia · brillo = energía']],
-    natmix: [['#7fb0d8', 'pigmento heredado'], ['#e0a84a', '+ tinte sutil de tejido (función)'], ['#e0a84a', 'segmentación · brillo = energía']],
-    tissue: [['#5a6b7a', 'estructura'], ['#e0664d', 'músculo'], ['#e0a84a', 'boca']],
+    natural: [['#7fb0d8', 'color = linaje (pigmento heredado)'], ['#e0a84a', '«Resaltar tipo tejido»: estructura·músculo·boca · segmentación · brillo = energía']],
     role: [['#3fb98f', 'herbívoro'], ['#e0664d', 'carnívoro'], ['#e0a84a', 'omnívoro'], ['#3fb98f', '(oficio por DIETA real)']],
     lineage: [['#e0664d', 'tono = linaje (color heredado, deriva lenta)']],
   };
