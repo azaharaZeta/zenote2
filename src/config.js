@@ -23,6 +23,7 @@ export const RENDER_P = {
   bloom: 0.75,         // UI: Bioluminiscencia — intensidad del aura+bloom (0 = apagado; recomendado en móvil/Baja)
   zoom: 1,             // UI: Zoom — zoom inicial
   colorMode: 'natural',// UI: Colorear por — modo inicial (natural · natmix · tissue · role · lineage)
+  quality: 'alta',     // UI: Calidad gráfica — preset de LOD/resolución/atmósfera (alta · media · baja); 'baja' = móvil/equipos lentos
   zoomMin: 1, zoomMax: 16,   // NO UI — límites del zoom (mín. 1 = el mundo entero cabe)
   dprCap: 2,           // NO UI — tope de devicePixelRatio (rendimiento)
   bloomDiv: 5,         // NO UI — el bloom reduce la capa de organismos a 1/bloomDiv y la reescala (downsampled)
@@ -33,6 +34,17 @@ export const RENDER_P = {
   border: 'rgba(4,7,12,0.55)',  // NO UI — color del borde (nodos y ojos), trazo oscuro abisal
   borderW: 1.2,        // NO UI — grosor del borde de los nodos (px)
   speckleMax: 3,       // NO UI — máx. de motas de textura por nodo (1..speckleMax, según linaje)
+};
+
+// PRESETS DE CALIDAD GRÁFICA (render PURO → NO toca la simulación ni el dorado). `RENDER_P.quality` elige el nivel; main.js
+// lee el preset activo. Cada nivel ajusta: dprCap (resolución de render; sustituye a RENDER_P.dprCap) · bloom (factor del
+// aura+bloom; 0 lo apaga junto con plancton/nieve) · atmos (densidad de plancton/nieve) · y los UMBRALES DE LOD en px a partir
+// de los cuales un nodo recibe silueta bézier (lodSil) / volumen-gradiente (lodVol, el más caro) / costillas (lodRib) / ojos
+// (lodEye). 'baja' = móvil/equipos lentos: sin bloom ni gradiente de volumen, siluetas solo de cerca → todo plano y barato.
+export const QUALITY = {
+  alta:  { dprCap: 2,   bloom: 1, atmos: 1,   lodSil: 1.6, lodVol: 4,   lodRib: 5,   lodEye: 1.2 },
+  media: { dprCap: 1.5, bloom: 1, atmos: 0.5, lodSil: 2.4, lodVol: 8,   lodRib: 11,  lodEye: 1.8 },
+  baja:  { dprCap: 1,   bloom: 0, atmos: 0,   lodSil: 3.2, lodVol: 1e9, lodRib: 1e9, lodEye: 2.6 },
 };
 
 // ===================== MUNDO (leyes físicas) =====================

@@ -2,7 +2,7 @@
 // y se maneja la CÁMARA (zoom + paneo TOROIDAL infinito) + los controles del panel. La cámara no toca la sim (fluida).
 
 import { TISSUE } from './engine/genome.js';
-import { RENDER_P, START, SIM_P, GENOME_P, WORLD_P } from './config.js';   // fuente única de parámetros (render/arranque/lab)
+import { RENDER_P, START, SIM_P, GENOME_P, WORLD_P, QUALITY } from './config.js';   // fuente única de parámetros (render/arranque/lab/calidad)
 
 const worker = new Worker(new URL('./engine/worker.js', import.meta.url), { type: 'module' });
 let WORLD = null, frame = null;
@@ -10,13 +10,17 @@ worker.onmessage = (e) => { const m = e.data; if (m.type === 'world') { WORLD = 
 
 const canvas = document.getElementById('world'), ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
-let cw = 0, ch = 0, vignette = null; const dpr = Math.min(RENDER_P.dprCap, window.devicePixelRatio || 1);
+let cw = 0, ch = 0, vignette = null;
+// CALIDAD gráfica (render PURO): preset activo `Q` (umbrales de LOD + resolución + atmósfera). `dpr` y `bloomStrength` se derivan
+// de él. 'baja' = móvil/equipos lentos. Cambiable en vivo (setQuality) sin tocar la simulación → el dorado nunca se mueve.
+let quality = RENDER_P.quality, Q = QUALITY[quality] || QUALITY.alta;
+let dpr = Math.min(Q.dprCap, window.devicePixelRatio || 1);
 // A4 — BLOOM (bioluminiscencia): la capa de ORGANISMOS se dibuja en un búfer aparte (glowCv); su versión reducida
 // (bloomCv, 1/BLOOM_DIV) se reescala aditivamente sobre el fondo → luz suave que sangra (coste ≈ 1/DIV², móvil ok).
 // bloomStrength=0 lo apaga (Baja/móvil). Es render PURO. Downsampled como en v1 (VISUAL.md).
 const glowCv = document.createElement('canvas'), glowCtx = glowCv.getContext('2d');
 const bloomCv = document.createElement('canvas'), bloomCtx = bloomCv.getContext('2d');
-let bloomStrength = RENDER_P.bloom; const BLOOM_DIV = RENDER_P.bloomDiv;
+let bloomStrength = RENDER_P.bloom * Q.bloom; const BLOOM_DIV = RENDER_P.bloomDiv;   // bloom EFECTIVO = intensidad base × factor de calidad (0 en 'baja' → sin aura/plancton/nieve)
 // FONDO DEL ABISMO = la VEGETACIÓN: el campo veg (que llega en cada frame) se hornea a una mini-textura (1 px/celda) y se
 // reescala SUAVIZADA → nebulosa VERDE (pasto/algas) sobre abismo. Donde hay más vegetación, más verde = ahí está la comida.
 // Fluye con la luz (su K sigue al campo de luz, que puede derivar — "Corriente del abismo").
@@ -76,7 +80,7 @@ const cl = (v) => v < 0 ? 0 : v > 100 ? 100 : v;   // clamp 0..100 para s/l
 const SNOW_PAL = [ 190, 200, 285, 45, 330 ];   // cian · azul · violeta · oro · rosa (chispa rara con color)
 let snow = null;
 function initSnow(size) {
-  const n = 680, p = new Float32Array(n * 4), hue = new Float32Array(n);
+  const n = Math.round(680 * Q.atmos), p = new Float32Array(n * 4), hue = new Float32Array(n);   // densidad ∝ calidad (0 en 'baja')
   for (let k = 0; k < n; k++) { p[k * 4] = Math.random() * size; p[k * 4 + 1] = Math.random() * size; p[k * 4 + 2] = Math.random() * 6.283; p[k * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.6;
     hue[k] = Math.random() < 0.06 ? SNOW_PAL[(Math.random() * SNOW_PAL.length) | 0] : -1; }   // ~6% con color
   snow = { p, hue, n, size };
@@ -112,7 +116,7 @@ function makeSparkSprite(hue) {
 }
 function initPlankton(size) {
   if (!sparkSprites) sparkSprites = [158, 172, 186, 200].map(makeSparkSprite);   // tonos teal/cian/verde (algas), distintos de los bichos
-  const n = Math.max(200, Math.round(700 * (size / 1500) * (size / 1500)));   // ∝ área → densidad ~constante a cualquier tamaño de mundo
+  const n = Math.round(700 * (size / 1500) * (size / 1500) * Q.atmos);   // ∝ área × calidad → densidad ~constante por tamaño de mundo (0 en 'baja')
   const px = new Float32Array(n), py = new Float32Array(n), ps = new Uint8Array(n), pscale = new Float32Array(n), pseed = new Float32Array(n);
   for (let i = 0; i < n; i++) { px[i] = Math.random() * size; py[i] = Math.random() * size; ps[i] = (Math.random() * sparkSprites.length) | 0; pscale[i] = 0.7 + Math.random() * 0.9; pseed[i] = Math.random(); }
   plankton = { px, py, ps, pscale, pseed, n, size };
@@ -299,7 +303,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
         const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
         const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
         const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc);
-        const rL = pr * (1 + aspect * 1.4); if (rL <= 1.6) continue;   // diminutos: sin contorno (el bloom los define)
+        const rL = pr * (1 + aspect * 1.4); if (rL <= Q.lodSil) continue;   // diminutos: sin contorno (LOD por calidad; el bloom los define)
         const ow = Math.max(0.8, pr * 0.16);   // grosor del reborde ∝ tamaño (suave)
         silPath(c, px, py, h + dir, rL + ow, pr * (1 + aspect * 0.15) + ow, pr * (1 - aspect * 0.85) + ow, true);   // append → acumula
       }
@@ -319,13 +323,13 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
         const hs = lx * sc + (tissue === TISSUE.MOUTH ? pr : 0); if (hs > headScore) { headScore = hs; headX = px; headY = py; headR = pr; } }
       // #2 — SILUETA bézier: gota/aleta/tentáculo (afila hacia afuera según `aspect`; eje = rumbo + dir). LOD: diminuta → punto.
       const rL = pr * (1 + aspect * 1.4), wB = pr * (1 + aspect * 0.15), wT = pr * (1 - aspect * 0.85);
-      if (rL > 1.6) silPath(c, px, py, h + dir, rL, wB, wT);
+      if (rL > Q.lodSil) silPath(c, px, py, h + dir, rL, wB, wT);   // LOD: silueta bézier; por debajo del umbral de calidad, punto plano
       else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
       // color base del NÚCLEO (per-tejido en modo Tejido; si no, el del agente) → lo usan el relleno Y las costillas
       let nh = bH, ns = bS, nl = bL;
       if (!halo && colorMode === 'tissue') { const c0 = TCOL_HSL[tissue] || TCOL_HSL[0]; nh = c0[0]; ns = c0[1]; nl = c0[2]; }
       if (halo) c.fillStyle = agentCol;   // aura: relleno plano (lo suaviza el bloom)
-      else if (pr > 4) {   // VOLUMEN: gradiente radial (caro, createRadialGradient) SOLO en nodos grandes = al acercar; a vista de mundo → plano (imperceptible) y barato
+      else if (pr > Q.lodVol) {   // VOLUMEN: gradiente radial (caro, createRadialGradient) SOLO sobre el umbral de calidad (en 'baja' nunca → plano y barato)
         const lr = rL > pr ? rL : pr;
         const g = c.createRadialGradient(px + LIGHT_DX * pr, py + LIGHT_DY * pr, pr * 0.15, px, py, lr * 1.03);
         g.addColorStop(0, `hsl(${nh | 0},${cl(ns - 12)}%,${cl(nl + 20)}%)`);    // realce
@@ -338,7 +342,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
       // (el contorno duro por-nodo se sustituyó por el CONTORNO unificado dibujado ANTES del cuerpo → reborde suave)
       // TEXTURA — COSTILLAS transversales (segmentación): curvas combadas hacia la punta, color = SOMBRA del propio cuerpo
       // (anatomía, no motas pegadas), ajustadas al ancho LOCAL de la silueta (sin clip → barato). LOD: solo nodos grandes (al acercar).
-      if (bandN > 1 && pr > 5) {
+      if (bandN > 1 && pr > Q.lodRib) {
         c.strokeStyle = `hsla(${nh | 0},${cl(ns + 8)}%,${cl(nl - 20)}%,0.42)`; c.lineWidth = Math.max(0.6, pr * 0.12);
         const rot = h + dir, cr = Math.cos(rot), sr = Math.sin(rot), txu = -sr, tyu = cr;   // eje (cr,sr) + transversal (txu,tyu)
         for (let bI = 1; bI < bandN; bI++) {
@@ -352,7 +356,7 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
     // pigmento + iris del linaje + GLINT especular hacia la luz de la escena (sin esclera blanca = sin pegatina), dentro de la
     // silueta. Nº y disposición por LINAJE (no siempre 2). La pupila MIRA al estímulo (percepción real, amenaza>presa) o al
     // rumbo en calma, y se aviva/dilata con la cercanía (alert). LOD: se funden al acercar; nada en vista de mundo.
-    if (!halo && headR > 1.2) {
+    if (!halo && headR > Q.lodEye) {
       const amt = Math.min(1, Math.max(0, (bodyR - 4) / 14));
       if (amt > 0.02) {
         const alert = aAlert ? aAlert[a] : 0, lh = (ahue[a] * 360) | 0, vv = (ahue[a] * 41.7) % 1;
@@ -520,7 +524,7 @@ const $ = (id) => document.getElementById(id);
 // los inits de display y del bucle del laboratorio (que leen .value).
 $('worldSize').value = START.worldSize; $('seedCount').value = START.seedCount; $('spawnSpread').value = START.spawnSpread; $('diversity').value = START.diversity;
 $('tps').value = RENDER_P.tps; $('fps').value = RENDER_P.maxFps; $('zoom').value = RENDER_P.zoom;
-$('colorMode').value = RENDER_P.colorMode;
+$('colorMode').value = RENDER_P.colorMode; $('quality').value = RENDER_P.quality;
 $('reproSex').checked = SIM_P.reproMode !== 'asexual'; $('reproAsex').checked = SIM_P.reproMode !== 'sexual';   // both→ambos · asexual→solo asex · sexual→solo sex
 { const src = { lightFlow: WORLD_P.lightFlow, vegGrowth: WORLD_P.vegGrowth, patchiness: WORLD_P.patchiness, grazeRefuge: SIM_P.grazeRefuge, forageReach: SIM_P.forageReach, baseCost: SIM_P.baseCost, reproE: SIM_P.reproE, grazeRate: SIM_P.grazeRate, scavRate: SIM_P.scavRate, fleeSpeed: SIM_P.fleeSpeed, mutRate: GENOME_P.mutRate };
   for (const s of document.querySelectorAll('.lab-slider')) if (s.dataset.key in src) s.value = src[s.dataset.key]; }
@@ -549,6 +553,16 @@ $('reset').addEventListener('click', resetWorld);
 $('hide').addEventListener('click', () => document.body.classList.add('hidden-panel'));
 $('show').addEventListener('click', () => document.body.classList.remove('hidden-panel'));
 $('colorMode').addEventListener('change', (e) => { colorMode = e.target.value; buildLegend(); });
+// CALIDAD gráfica (render PURO): cambia el preset de LOD/resolución/atmósfera en vivo. Reaplica dpr (vía resize), bloom y la
+// densidad de plancton/nieve. No envía nada al worker → la simulación es byte-idéntica (el dorado no se mueve).
+$('quality').addEventListener('change', (e) => setQuality(e.target.value));
+function setQuality(q) {
+  if (!QUALITY[q]) return; quality = q; Q = QUALITY[q];
+  bloomStrength = RENDER_P.bloom * Q.bloom;       // 'baja' (bloom 0) apaga aura + bloom + plancton + nieve
+  snow = null; plankton = null;                    // re-densificar la atmósfera al nuevo nivel (se re-crean en el próximo draw)
+  dpr = Math.min(Q.dprCap, window.devicePixelRatio || 1); resize();   // nueva resolución de render (recrea los búferes)
+  if (WORLD && frame) draw();                      // redibuja YA (el rAF puede estar throttleado o en pausa)
+}
 // Histograma: la UI elige el rasgo a distribuir → el worker lo binnea por oficio en cada foto. Envía el inicial (por si el navegador restauró otra opción).
 $('geneTrait').addEventListener('change', (e) => worker.postMessage({ type: 'histTrait', key: e.target.value }));
 worker.postMessage({ type: 'histTrait', key: $('geneTrait').value });
