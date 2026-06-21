@@ -1,0 +1,11 @@
+{
+  "name": "zenote2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zenote 2 — simulador de evolución emergente (estáticos; type:module para correr el motor headless en Node).",
+  "scripts": {
+    "test": "node test/run-all.mjs",
+    "serve": "python3 -m http.server 8732"
+  }
+}

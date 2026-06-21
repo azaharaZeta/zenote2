@@ -1,0 +1,19 @@
+# CI — Gate de correctitud de Zenote 2. Proyecto vanilla SIN dependencias → no hace falta `npm install`: solo Node +
+# correr el runner, que falla (exit 1) si algún test de invariantes/conservación/determinismo/ecología se rompe.
+# Cubre los 9 tests del gate (incl. dorado m8 + regresión ecológica m9).
+name: gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Gate de correctitud (invariantes + dorado + ecología)
+        run: npm test
