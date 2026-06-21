@@ -38,7 +38,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Luz y vegetación:** Luz solar (`lightMul`) · Corriente del abismo (`lightFlow`) · Productividad (`vegGrowth`) · Comida en
   parches (`patchiness`) · Reserva de rebrote (`grazeRefuge`).
 - **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad (`fleeSpeed`).
-- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`).
+- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`, **default `'sexual'`** = sexual OBLIGADA, sin respaldo asexual).
 - **Evolución:** Ritmo de mutación (`mutRate`).
 - NO UI (config): `vegKcoef/vegEcoef/vegDecay/vegSeed/vegDiffuse/forageMassRef`, `massCost/massCostExp`, etc.
 - Arranque (reinicio): Tamaño de mundo, Sembrado inicial, Extensión, Diversidad, + `vegInit` (NO UI).
@@ -77,7 +77,9 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 ## Resultados medidos (headless, 3-5 semillas, 30-50k ticks)
 - **Conserva** materia (deriva ~0.004% = ruido f32) + energía (luz→calor): gate **9/9 verde** (`npm run test:zenote2`; incluye m9 = regresión ecológica + CI en `.github/`).
 - **Estructura trófica robusta y persistente:** herbívoros + carnívoros + carroñeros coexisten a 30-50k en TODAS las semillas
-  (≈65%/15%/20% por dieta); el **cazador NO se extingue** (el baseline de v1 lo perdía en 5/5 a mundo pequeño). Mortalidad
+  (≈65%/15%/20% por dieta, medido con 'both'); el **cazador NO se extingue** (el baseline de v1 lo perdía en 5/5 a mundo pequeño).
+  Con el default actual **reproMode='sexual'** (obligada) el cazador queda MÁS FINO (carn 9-25 vs 26-57 con 'both') pero sigue
+  coexistiendo — decisión de usuario de aceptar el ápice más fino (m9 floor del cazador bajado a 6). Mortalidad
   **depredación-dominante** (~2:1 frente a inanición). Diversidad de talla emerge incluso desde clones (σ≈2.0).
 - **Población estable** (no boom-bust): ~400-480 en mundo 1500, energía-limitada (≪ cap).
 - **Locomoción viva y estable** (gracias al escape-por-velocidad `fleeSpeed`): el "94% móvil" de antes era un **transitorio de la
@@ -87,7 +89,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
   redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
   boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x4bcdaeaa` — re-fijado por la DIVERSIDAD INICIAL del fundador, que perturba morfología + r/K ∝ div; cámbialo solo con cambios de física INTENCIONADOS).
+- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x55828375` — re-fijado por reproMode='sexual' por DEFAULT; cámbialo solo con cambios de física INTENCIONADOS).
 - Memoria: `zenote2-animals-only-vegetation`.
 
 ## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)

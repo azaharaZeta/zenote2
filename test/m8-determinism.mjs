@@ -28,11 +28,11 @@ function run(ticks) {
   return { c: checksum(s), pop: s.pop(), tick: s.tick };
 }
 
-const GOLDEN = 0x4bcdaeaa;   // re-fijado 2026-06-21: DIVERSIDAD INICIAL del fundador — makeFounder ahora perturba la morfología
-                             // (talla/proporciones/aletas/oscilación) + r/K ∝ div, con tejidos FIJOS (boca+músculo) de suelo de
-                             // viabilidad. Cambio INTENCIONADO de génesis (el gate corre a div=1). A div=0 sigue dando clones
-                             // byte-idénticos. Previos: 0xe8984a53 (homología compartida #4), 0xf5375391 (coste de boca),
-                             // 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed). seed 1, cap 4000, 800 fundadores, 2000 ticks.
+const GOLDEN = 0x55828375;   // re-fijado 2026-06-21: reproMode='sexual' por DEFAULT (antes 'both') — repro SEXUAL OBLIGADA, sin
+                             // respaldo asexual. Cambio INTENCIONADO de dinámica (pop más baja; el cazador queda más fino — ver m9,
+                             // decisión de usuario de aceptar el ápice más fino). Previos: 0x4bcdaeaa (diversidad inicial del fundador),
+                             // 0xe8984a53 (homología #4), 0xf5375391 (coste boca), 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed).
+                             // seed 1, cap 4000, 800 fundadores, 2000 ticks.
 const TICKS = 2000;
 console.log('=== Checksum dorado — determinismo + deriva ===\n');
 const a = run(TICKS), b = run(TICKS);
