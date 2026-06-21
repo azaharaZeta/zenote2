@@ -168,3 +168,22 @@ faltaba: **volumen** (v1 sombrea cada nodo con gradiente radial, incluso en el t
 2. ~~A3 (textura procedural, motas por linaje, LOD)~~ ✅ HECHO 2026-06-19 (perf medida, sin caché necesaria).
 3. Opcionales restantes: A4 (bloom/bioluminiscencia, OFF en calidad Baja), A5 (cadáveres con forma).
 4. Decidir si se aborda el **spike B1** (color sexual evolvable / D16) como pista de emergencia aparte.
+
+## Glow puro + bloom robusto (2026-06-21, sesión posterior)
+A petición del usuario, se depuró la bioluminiscencia. Todo render PURO → **dorado intacto**.
+- **AURA ELIMINADA.** La pasada `halo=true` dibujaba una silueta ×2.2 plana semitransparente. Leía como "una zona lisa pegada"
+  y, a zoom alto, **tapaba el glow**. Se quitó por completo (parámetro `halo` y sus ramas fuera de `drawOrgs`; `auraMul`/`auraAlpha`
+  fuera de config). Ahora el glow = SOLO el bloom (desenfoque aditivo de los cuerpos nítidos). Consecuencia: los modos Tejido/Oficio
+  ya no llevan halo de linaje (son señal pura); leyenda y etiquetas del selector actualizadas ("Tejido + aura real" → "Tejido", etc.).
+- **Bloom escalado con el zoom + AMPLIACIÓN PROGRESIVA.** El bloom era un downsample a tamaño FIJO (`canvas/BLOOM_DIV`): radio de
+  desenfoque fijo en px → invisible al acercar (defecto de escala). Fix: el factor de reducción escala con el zoom (`bd = BLOOM_DIV·zoom`)
+  → glow ~constante a cualquier zoom. Y la ampliación se hace **DUPLICANDO el tamaño por pasos** (ping-pong de 2 búferes), no de un
+  salto único, que dejaba "rejilla" (interpolación lineal entre texeles). Encadenar pasos ×2 ≈ interpolación de orden alto → suave.
+- **Por qué NO `ctx.filter blur`:** se probó (gaussiano real) y funcionaba en Chromium, pero **Safari < 16.4 lo ignora** → el usuario
+  veía el glow sin desenfocar. Se descartó: el método de reescalado (solo `drawImage`) es universal. Lección: nada de `ctx.filter`
+  para efectos load-bearing en una app que se publica para cualquier navegador.
+- **Borde = color del linaje OSCURECIDO, no negro.** El contorno unificado se rellenaba con `hsl(hue, bS-12, bL-40)` (luminosidad
+  ~14% → negro). Pasó a `hsl(hue, bS, bL-28)` (~26%) → un reborde que es la sombra del propio color, integrado. (`RENDER_P.border`/
+  `borderW` quedaron sin uso — el borde real es este fill, no un stroke; pendiente de limpieza menor.)
+- **Calidad gráfica (alta/media/baja) con LOD** → ficha propia `archivo/modo-calidad-grafica-lod.md`.
+- **Fix de parpadeo de ojos** ("dos cabezas") → ficha propia `archivo/ojos-parpadeo-dos-cabezas.md`.

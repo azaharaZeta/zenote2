@@ -48,12 +48,17 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - Fondo = **campo de VEGETACIÓN** (nebulosa TEAL con parches; más brillo = más comida; realce del pasto tenue; fluye/migra). Sustituye a la antigua nebulosa de luz.
 - Organismos: **siluetas bézier por nodo** (gota/aleta/tentáculo que afila hacia afuera según `aspect` → criaturas, no óvalos)
   con **sombreado volumétrico** (gradiente radial luz→sombra al acercar → gelatina 3D; LOD: plano a vista de mundo), **costillas
-  transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde, sin líneas duras).
+  transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde = el color del linaje OSCURECIDO, no negro; sin líneas duras).
   Color por modo (Natural=linaje · Tejido · **Oficio**=herbívoro/carnívoro/omnívoro por dieta · Linaje). Ojos = fracción carnívora
   de la dieta. Cadáveres con forma que se desvanecen. Inspector: dieta "pasto/caza/carroña" + linaje + r/K (umbral·inversión).
 - **Abismo vivo:** nebulosa de vegetación TEAL con **profundidad** (campo frío↔cálido fundido en el bake) + **plancton/micro-flora**
   (chispas que florecen donde hay veg) + **nieve marina** (detrito a la deriva que titila) bajo los organismos → profundidad y vida.
-  Bloom/aura (bioluminiscencia, gatea plancton+nieve en móvil/Baja) + viñeta. (Referencia estética: el render de zenote1, `src/render/canvas.js`.)
+  **GLOW** (bioluminiscencia): es el desenfoque ADITIVO de los CUERPOS (NO hay aura plana — se quitó porque tapaba el glow), con
+  radio ∝ zoom y AMPLIACIÓN por pasos (×2, ping-pong de búferes) → suave a cualquier zoom y SIN "rejilla"; solo `drawImage`
+  (cross-browser; NO `ctx.filter blur`, que Safari < 16.4 ignora → sin glow). Gatea plancton+nieve en móvil/Baja. + viñeta.
+- **Calidad gráfica (UI: alta · media · baja)** — preset (`config.QUALITY`) de LOD (umbrales en px de silueta/volumen/costillas/ojos)
+  + resolución (`dprCap`) + atmósfera (plancton/nieve) + glow. `baja` = móvil/equipos lentos: sin glow ni volumen, siluetas solo de
+  cerca → plano y barato. Cambia en vivo (setQuality); render PURO → no toca la sim ni el dorado.
 - Gráficas en vivo: población / nacimientos (sex·asex) / muertes (predación·inanición) / **talla (masa) media por oficio en el
   tiempo** (ver la talla evolucionar + divergir entre nichos) + **HISTOGRAMA de un rasgo seleccionable**
   (masa · boca · v.máx · nº partes · umbral de cría r/K · inversión por cría · linaje), apilado por oficio (herbívoro/resto) sobre eje
