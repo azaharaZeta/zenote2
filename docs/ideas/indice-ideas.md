@@ -22,14 +22,14 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 
 ## Ideas de usuario (pendientes de procesar)
 > Solo un humano edita esta sección. Texto breve; el detalle se desarrolla al crear la ficha.
-
-_(Sin ideas sin procesar ni en análisis. Todas las del usuario están implementadas y archivadas:
-`archivo/colorear-por-simplificacion.md` · `archivo/diversidad-inicial-viabilidad.md` · `archivo/ventana-inspector-organismo.md`.)_
----
+- Analizar implementar Vejez. Tenemos ahora mismo criaturas inmortales, que acumulan energía al infinito.
+- quitar del ui la info de semilla (sin alterar funcionalidad).
+- condensar el ui un poco, y agrupar por contextos desplegables.
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
 Emergencia / realismo:
 - Día/noche activable como slider (ya existe `dayNightAmp`, a 0) → ritmos de actividad, ventaja por acumular reservas.
+- Spike: ONTOGENIA real (crías que crecen escalando el FENOTIPO + madurez + vulnerabilidad juvenil). Hipótesis falsable: ¿desatasca el r/K near-neutral? Ver `archivo/crias-juveniles-crecimiento.md` (la opción A, solo-render, ya está hecha).
 
 Técnico / robustez:
 - Validar rendimiento en MÓVIL REAL con la población al tope (el toggle de calidad alta/media/baja YA existe → `archivo/modo-calidad-grafica-lod.md`; falta medir fps en un móvil de verdad, no en el preview que throttlea rAF).

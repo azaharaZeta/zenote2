@@ -278,12 +278,12 @@ function drawCorpses(oX, oY, sc) {
 }
 
 function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glowCv (el glow lo da el bloom al desenfocar este búfer)
-  const { n, ax, ay, ah, aspd, ahue, aE, aGazeX, aGazeY, aAlert, arole, partOff, partData } = frame;
-  c.strokeStyle = RENDER_P.border; c.lineWidth = RENDER_P.borderW;   // BORDE: trazo oscuro abisal fino; reaprovecha el path del relleno
+  const { n, ax, ay, ah, aspd, ahue, aE, aGazeX, aGazeY, aAlert, arole, aGrow, partOff, partData } = frame;
   for (let a = 0; a < n; a++) {
     const wx = ax[a], wy = ay[a], bx = oX + wx * sc, by = oY + wy * sc;
     if (bx < -40 || bx > cw + 40 || by < -40 || by > ch + 40) continue;   // culling en pantalla
     const h = ah[a], chh = Math.cos(h), shh = Math.sin(h), spd = aspd[a], p0 = partOff[a], p1 = partOff[a + 1];
+    const grow = aGrow ? aGrow[a] : 1, scg = sc * grow;   // CRÍAS: la edad real escala el tamaño DIBUJADO del cuerpo entero (posiciones+radios) alrededor del centro. Solo render → la sim no cambia.
     // A2 — VITALIDAD: los hambrientos se atenúan (la muerte se ve venir). energía 0..1 → alpha 0.35..1.
     c.globalAlpha = aE ? 0.35 + 0.65 * aE[a] : 1;
     // A2 — COLOR DEL NÚCLEO según el modo: 'natural'/'lineage' = pigmento heredado (linaje) · 'role' = oficio (dieta). Brillo ∝
@@ -303,7 +303,7 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
       for (let k = p1 - 1; k >= p0; k--) {
         const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
         const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
-        const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc);
+        const px = bx + (lx * chh - uy * shh) * scg, py = by + (lx * shh + uy * chh) * scg, pr = Math.max(1, r * scg);
         const rL = pr * (1 + aspect * 1.4); if (rL <= Q.lodSil) continue;   // diminutos: sin contorno (LOD por calidad; el bloom los define)
         const ow = Math.max(0.8, pr * 0.16);   // grosor del reborde ∝ tamaño (suave)
         silPath(c, px, py, h + dir, rL + ow, pr * (1 + aspect * 0.15) + ow, pr * (1 - aspect * 0.85) + ow, true);   // append → acumula
@@ -313,7 +313,7 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
     for (let k = p1 - 1; k >= p0; k--) {
       const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], tissue = partData[o + 3], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
       const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
-      const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc);
+      const px = bx + (lx * chh - uy * shh) * scg, py = by + (lx * shh + uy * chh) * scg, pr = Math.max(1, r * scg);
       { const dx = px - bx, dy = py - by, ext = Math.hypot(dx, dy) + pr; if (ext > bodyR) bodyR = ext;
         // CABEZA = nodo más adelantado (proyección sobre el rumbo) + leve preferencia BOCA, donde se anclan los OJOS. Se
         // puntúa con la coord local ADELANTE `lx`·sc, NO con dx·chh+dy·shh: ambas son IGUALES en aritmética real (la
@@ -348,7 +348,6 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
           const f = bI / bandN, lw = (wB + (wT - wB) * f) * 0.82, ax = (2 * f - 1) * rL, ccx = px + cr * ax, ccy = py + sr * ax, bow = lw * 0.4;
           c.beginPath(); c.moveTo(ccx - txu * lw, ccy - tyu * lw); c.quadraticCurveTo(ccx + cr * bow, ccy + sr * bow, ccx + txu * lw, ccy + tyu * lw); c.stroke();
         }
-        c.strokeStyle = RENDER_P.border; c.lineWidth = RENDER_P.borderW;   // restaurar el estilo del borde para el próximo nodo
       }
     }
     // OJOS (solo render): ANCLADOS a la parte-CABEZA (se acabó el flotar) y dibujados como EYESPOT orgánico — mancha de
@@ -360,7 +359,7 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
       if (amt > 0.02) {
         const alert = aAlert ? aAlert[a] : 0, lh = (ahue[a] * 360) | 0, vv = (ahue[a] * 41.7) % 1;
         const hr = (ahue[a] * 9301) % 1, nEye = hr < 0.18 ? 1 : hr < 0.85 ? 2 : 3;   // linaje → cíclope / par / tres (rompe "siempre 2")
-        const er = headR * (0.36 - 0.045 * nEye + 0.05 * alert) * (0.85 + 0.3 * vv);   // ∝ CABEZA; más ojos → algo menores; crece con la alerta
+        const er = headR * (0.36 - 0.045 * nEye + 0.05 * alert) * (0.85 + 0.3 * vv) * (1 + (1 - grow) * 0.6);   // ∝ CABEZA; OJOS proporcionalmente MAYORES en crías (toque tierno); más ojos → menores; crece con la alerta
         const fo = headR * 0.20, lo = headR * 0.44, latx = -shh, laty = chh;            // dentro de la silueta: adelante (fo) + apertura lateral (lo) en el eje transversal
         let gx = chh, gy = shh; if (alert > 0.01 && aGazeX) { gx = aGazeX[a]; gy = aGazeY[a]; }   // mirada: al estímulo o, en calma, al rumbo
         const ga0 = c.globalAlpha, baseA = ga0 * amt;

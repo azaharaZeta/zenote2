@@ -6,6 +6,7 @@ import { World, WORLD_P } from './world.js';
 import { Sim, SIM_P } from './sim.js';
 import { GENOME_P } from './genome.js';   // para el ritmo de mutación (parámetro de UI en vivo)
 import { START, RENDER_P } from '../config.js';   // defaults de arranque y velocidad inicial (fuente única)
+const GROW_MIN = RENDER_P.growMin, GROW_MAT = RENDER_P.growMature || 1;   // CRÍAS (render): tamaño dibujado = growMin→1 según la edad/growMature
 
 // OFICIO REALIZADO desde la DIETA (veg/caza/carroña acumuladas): el rol EMERGE de lo que el animal COME, no de su morfología
 // (un herbívoro y un carnívoro tienen ambos boca → solo la dieta los distingue). 0 herbívoro · 1 carnívoro · 2 omnívoro.
@@ -60,7 +61,7 @@ function snapshot() {
   // partData = [lx, ly, r, tissue, phase, aspect, dir] por nodo (stride 7): aspect+dir → siluetas orientadas en el render.
   // aE = energía normalizada [0,1] por agente (E/reproE) → el render atenúa a los hambrientos ("la muerte se ve venir").
   // aGazeX/Y = dirección al estímulo más saliente (mundo) · aAlert = intensidad [0,1] → el render ORIENTA y aviva los OJOS (todos sensan → todos tienen ojos).
-  const ax = new Float32Array(n), ay = new Float32Array(n), ah = new Float32Array(n), aspd = new Float32Array(n), ahue = new Float32Array(n), aE = new Float32Array(n), aGazeX = new Float32Array(n), aGazeY = new Float32Array(n), aAlert = new Float32Array(n), arole = new Uint8Array(n), aid = new Int32Array(n), partOff = new Int32Array(n + 1), partData = new Float32Array(totalParts * 7);
+  const ax = new Float32Array(n), ay = new Float32Array(n), ah = new Float32Array(n), aspd = new Float32Array(n), ahue = new Float32Array(n), aE = new Float32Array(n), aGazeX = new Float32Array(n), aGazeY = new Float32Array(n), aAlert = new Float32Array(n), aGrow = new Float32Array(n), arole = new Uint8Array(n), aid = new Int32Array(n), partOff = new Int32Array(n + 1), partData = new Float32Array(totalParts * 7);
   let po = 0, nHerb = 0, nCarn = 0, detail = null, massSumH = 0, massSumC = 0;   // massSum* → masa media por oficio (serie temporal #12)
   // histograma del rasgo seleccionado (por bin, separado herbívoro/resto). Rango fijo + array SoA del rasgo (o caso especial nParts/hue).
   const gh = new Float32Array(HBINS), gc = new Float32Array(HBINS);
@@ -68,6 +69,7 @@ function snapshot() {
   const tArr = histTrait === 'mass' ? s.mass : histTrait === 'mouthCap' ? s.mouthCap : histTrait === 'vmax' ? s.vmax : histTrait === 'reproK' ? s.reproK : histTrait === 'investFrac' ? s.investFrac : null;
   for (let a = 0; a < n; a++) {
     const i = idx[a]; ax[a] = s.x[i]; ay[a] = s.y[i]; ahue[a] = s.genome[i].hue; aid[a] = s.serial[i];
+    aGrow[a] = GROW_MIN + (1 - GROW_MIN) * Math.min(1, s.age[i] / GROW_MAT);   // CRÍAS (write-only): tamaño DIBUJADO ∝ edad real (growMin→1); la dinámica no lo lee → dorado intacto
     aE[a] = Math.min(1, Math.max(0, s.E[i] / (SIM_P.reproE * s.reproK[i])));   // vitalidad para el render (atenúa hambrientos); umbral PROPIO (r/K)
     const vx = s.vx[i], vy = s.vy[i], sp = Math.sqrt(vx * vx + vy * vy); ah[a] = sp > 1e-3 ? Math.atan2(vy, vx) : 0;
     aspd[a] = sp / 3 > 1 ? 1 : sp / 3;   // velocidad normalizada → amplitud de ondulación del render
@@ -113,10 +115,10 @@ function snapshot() {
   // crecimiento) y FLUYE si lightFlow>0 (su K sigue a la luz). Transferible (cero copia).
   const veg = world.veg.slice();
   // detail = null si no hay selección O si el agente seleccionado ya murió (el cliente lo detecta: selectedId set pero detail null)
-  postMessage({ type: 'frame', tick: s.tick, pop: n, n, ax, ay, ah, aspd, ahue, aE, aGazeX, aGazeY, aAlert, arole, aid, partOff, partData,
+  postMessage({ type: 'frame', tick: s.tick, pop: n, n, ax, ay, ah, aspd, ahue, aE, aGazeX, aGazeY, aAlert, aGrow, arole, aid, partOff, partData,
       dcm, dcx, dcy, dch, dchue, dcfade, dcOff, dcData, veg, histPop, histHerb, histCarn, histSexB, histAsexB, histPred, histStarv, histMassH, histMassC,
       geneTrait: histTrait, geneLo: trng[0], geneHi: trng[1], geneH: gh, geneC: gc, sel: selectedId, detail },
-    [ax.buffer, ay.buffer, ah.buffer, aspd.buffer, ahue.buffer, aE.buffer, aGazeX.buffer, aGazeY.buffer, aAlert.buffer, arole.buffer, aid.buffer, partOff.buffer, partData.buffer,
+    [ax.buffer, ay.buffer, ah.buffer, aspd.buffer, ahue.buffer, aE.buffer, aGazeX.buffer, aGazeY.buffer, aAlert.buffer, aGrow.buffer, arole.buffer, aid.buffer, partOff.buffer, partData.buffer,
      dcx.buffer, dcy.buffer, dch.buffer, dchue.buffer, dcfade.buffer, dcOff.buffer, dcData.buffer, veg.buffer, gh.buffer, gc.buffer]);
 }
 

@@ -56,7 +56,8 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
   transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde = el color del linaje OSCURECIDO, no negro; sin líneas duras).
   Color por modo (**Natural**=linaje + slider «Resaltar tipo tejido» 0→1 (0 solo natural · 1 solo tejido) — el GLOW conserva SIEMPRE
   el natural, nunca el del tejido · **Oficio**=herbívoro/carnívoro/omnívoro por dieta · Linaje). Ojos = fracción carnívora
-  de la dieta. Cadáveres con forma que se desvanecen. Inspector: **retrato del organismo** (silueta dibujada en la tarjeta; se
+  de la dieta. **Crías**: nacen pequeñas y CRECEN al tamaño adulto con la edad (solo render: el tamaño dibujado ∝ edad, `growMin→1`
+  en `growMature` ticks; write-only → dorado intacto; mecánicamente la cría ya es adulta). Cadáveres con forma que se desvanecen. Inspector: **retrato del organismo** (silueta dibujada en la tarjeta; se
   CONGELA su cadáver al morir hasta cerrar/cambiar) + dieta "pasto/caza/carroña" + linaje + r/K. La cámara SIGUE al seleccionado
   (sin botón; panear lo cancela). El cuerpo viaja en `detail.bodyParts` (write-only → no toca el dorado).
 - **Abismo vivo:** nebulosa de vegetación TEAL con **profundidad** (campo frío↔cálido fundido en el bake) + **plancton/micro-flora**

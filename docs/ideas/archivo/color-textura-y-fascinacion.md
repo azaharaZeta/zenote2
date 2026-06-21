@@ -1,5 +1,9 @@
 # Color, textura y fascinación visual — estudio de viabilidad — **(Zenote 2)**
 
+**Estado: ARCHIVADA / COMPLETA (2026-06-21).** Eje visual implementado: silueta bézier + sombreado volumétrico + segmentación
+(costillas) + contorno suave + glow/bloom + abismo vivo (nieve/plancton/nebulosa). A1–A5 hechos; B1 (color sexual) probado y
+revertido. El "Colorear por" se simplificó a Natural (+ slider de tejido) · Oficio · Linaje (ficha aparte). Render puro → dorado intacto.
+
 > Idea de usuario: dar a los organismos colores/texturas/aspectos **fascinantes** (objetivo #2: ser fascinante de ver),
 > **sin romper el objetivo #1** (evolución emergente realista con el modelado genético) y **sin penalizar el rendimiento**
 > (debe correr en móvil). Estudio + plan; pendiente de decisión antes de implementar.

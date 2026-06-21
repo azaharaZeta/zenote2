@@ -9,7 +9,7 @@ export const START = {
   worldSize: 1500,     // UI: Tamaño del mundo — lado del toro (u)
   seedCount: 100,      // UI: Sembrado inicial — nº de fundadores
   spawnSpread: 0.30,      // UI: Extensión del sembrado — 1 = todo el mundo (uniforme) · <1 = disco central de radio spread·mundo/2
-  diversity: 0,        // UI: Diversidad inicial — 1 = fundadores variados (tono/fase/cerebro) · 0 = todos idénticos (clones)
+  diversity: 0,        // UI: Diversidad inicial — 0 = fundadores idénticos (clones) · 1 = variados (morfología + r/K + color; tejidos boca+músculo fijos = suelo de viabilidad)
   cap: 12000,          // NO UI — tope del pool (nº máx. de agentes)
   lightBase: 2.5,      // NO UI — irradiancia OPERATIVA del mundo (la UI "Luz solar" ajusta el MULTIPLICADOR, no esto). Sustituye a WORLD_P.lightBase al crear el mundo.
   nutrientInit: 1.5,   // NO UI — nutriente inicial por celda
@@ -23,16 +23,15 @@ export const RENDER_P = {
   bloom: 0.75,         // UI: Bioluminiscencia — intensidad del glow/bloom (0 = apagado; recomendado en móvil/Baja)
   zoom: 1,             // UI: Zoom — zoom inicial
   colorMode: 'natural',// UI: Colorear por — modo inicial (natural · role · lineage)
-  tissueMix: 0.5,      // UI: Resaltar tipo tejido — en modo 'natural', mezcla del color del cuerpo entre natural (0) y tejido/función (1). El glow conserva SIEMPRE el natural.
+  tissueMix: 0.4,      // UI: Resaltar tipo tejido — en modo 'natural', mezcla del color del cuerpo entre natural (0) y tejido/función (1). El glow conserva SIEMPRE el natural.
   quality: 'alta',     // UI: Calidad gráfica — preset de LOD/resolución/atmósfera (alta · media · baja); 'baja' = móvil/equipos lentos
   zoomMin: 1, zoomMax: 16,   // NO UI — límites del zoom (mín. 1 = el mundo entero cabe)
   dprCap: 2,           // NO UI — tope de devicePixelRatio. Hoy lo fija el preset de QUALITY (dprCap por nivel); se conserva como referencia del nivel 'alta'.
   bloomDiv: 5,         // NO UI — factor de reducción BASE del bloom (a zoom 1); en main.js el factor escala con el zoom (bd = bloomDiv·zoom)
   maxSnapMs: 250,      // NO UI — en MÁX: un fotograma cada N ms (≈4 fps; el lote ≤N garantiza ≥1 fps)
   undulation: 2.2,     // NO UI — amplitud de la onda viajera (carácter "vivo" del cuerpo)
-  border: 'rgba(4,7,12,0.55)',  // NO UI — color del borde (nodos y ojos), trazo oscuro abisal
-  borderW: 1.2,        // NO UI — grosor del borde de los nodos (px)
-  speckleMax: 3,       // NO UI — máx. de motas de textura por nodo (1..speckleMax, según linaje)
+  growMin: 0.45,       // NO UI — CRÍAS (solo render): tamaño dibujado al NACER como fracción del adulto (0.45 = 45%). La sim no cambia.
+  growMature: 320,     // NO UI — CRÍAS (solo render): edad (ticks) a la que la cría alcanza el tamaño adulto (crece growMin→1 con la edad real).
 };
 
 // PRESETS DE CALIDAD GRÁFICA (render PURO → NO toca la simulación ni el dorado). `RENDER_P.quality` elige el nivel; main.js
@@ -112,7 +111,7 @@ export const SIM_P = {
   forageReach: 3,      // NO UI — FORRAJEO POR ÁREA: radio (celdas) del que pasta un animal a talla máx → el grande accede a más
                        // terreno (payoff de talla del herbívoro). 0 = solo su celda. El radio efectivo ∝ talla (mass/forageMassRef).
   forageMassRef: 4,    // NO UI — masa a la que el radio de forrajeo llega al máximo (forageReach); por debajo, proporcional.
-  reproMode: 'both',   // UI: Reproducción — 'both' (sexual si hay pareja + respaldo asexual) · 'asexual' · 'sexual' (obligada, sin respaldo)
+  reproMode: 'sexual',   // UI: Reproducción — 'both' (sexual si hay pareja + respaldo asexual) · 'asexual' · 'sexual' (obligada, sin respaldo)
   // --- resto (NO UI) ---
   scavRate: 0.5,       // UI: Carroñeo — energía de detrito (detritusE de animales muertos) ingerible por tick ∝ mouthCap. 0 = apagado.
                        // La MISMA boca que pasta y caza también rebaña carroña → carroñeo facultativo emergente.
