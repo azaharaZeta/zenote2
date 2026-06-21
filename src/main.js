@@ -65,7 +65,7 @@ window.addEventListener('resize', resize); resize();
 
 // --- Cámara + selección ---
 let zoom = RENDER_P.zoom, camX = 0, camY = 0; const MINZ = RENDER_P.zoomMin, MAXZ = RENDER_P.zoomMax;   // mínimo 1.0 = el mundo entero cabe
-let selectedId = -1, following = false;   // inspector: serial del agente seleccionado + seguimiento de cámara
+let selectedId = -1, following = false, lastDetail = null;   // inspector: serial seleccionado · seguimiento de cámara · último detalle vivo (para congelar el cadáver)
 function resetCamera() { if (WORLD) { camX = WORLD.size / 2; camY = WORLD.size / 2; } }
 const fitScale = () => WORLD ? Math.min(cw, ch) / WORLD.size : 1;
 const scaleOf = () => fitScale() * zoom;
@@ -422,6 +422,72 @@ function updateHud() {
   hud.textContent = `pob ${frame.pop} · tick ${frame.tick} · ${tpsReal} t/s · ${fps} fps`;
 }
 
+// Retrato RICO del organismo seleccionado en la tarjeta (mini-canvas): MISMO aspecto que en el mundo — contorno + silueta bézier
+// + sombreado VOLUMÉTRICO + costillas + ojos, RESPETANDO el modo de color activo (Natural + «resaltar tejido» al mismo % · Oficio ·
+// Linaje). Estático (sin ondulación ni heading: mira a +x). dead=true → cadáver apagado de linaje, sin ojos. Render PURO.
+// Geometría en detail.bodyParts (stride 6: lx,ly,r,aspect,dir,tissue) + d.role (modo Oficio).
+const inspCv = document.getElementById('inspCanvas'), inspCtx = inspCv && inspCv.getContext('2d');
+function drawInspOrganism(d, dead) {
+  if (!inspCtx) return;
+  const c = inspCtx, W = inspCv.width, H = inspCv.height; c.clearRect(0, 0, W, H);
+  const bp = d && d.bodyParts; if (!bp || !bp.length) return;
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  for (let k = 0; k < bp.length; k += 6) { const lx = bp[k], ly = bp[k + 1], r = bp[k + 2]; if (lx - r < minX) minX = lx - r; if (lx + r > maxX) maxX = lx + r; if (ly - r < minY) minY = ly - r; if (ly + r > maxY) maxY = ly + r; }
+  const scl = Math.min(W * 0.8 / Math.max(1, maxX - minX), H * 0.8 / Math.max(1, maxY - minY));
+  const oX = W / 2 - (minX + maxX) / 2 * scl, oY = H / 2 - (minY + maxY) / 2 * scl;
+  // color base del NÚCLEO según el MODO activo (igual que drawOrgs): natural/lineage = linaje · role = oficio · cadáver = linaje apagado.
+  let bH = (d.hue * 360) | 0, bS = 62, bL = 54;
+  if (dead) { bS = 16; bL = 32; }
+  else if (colorMode === 'role') { const r0 = RCOL_HSL[d.role] || RCOL_HSL[0]; bH = r0[0]; bS = r0[1]; bL = r0[2]; }
+  else if (colorMode === 'lineage') { bS = 58; bL = 58; }
+  const tint = (!dead && colorMode === 'natural') ? tissueMix : 0;   // «resaltar tipo tejido»: MISMO % que el mundo (solo en Natural)
+  c.globalAlpha = dead ? 0.6 : 1;
+  // CONTORNO unificado (reborde = linaje oscurecido), como en el mundo
+  c.beginPath();
+  for (let k = 0; k < bp.length; k += 6) {
+    const lx = bp[k], ly = bp[k + 1], r = bp[k + 2], aspect = bp[k + 3], dir = bp[k + 4];
+    const px = oX + lx * scl, py = oY + ly * scl, pr = Math.max(1, r * scl), rL = pr * (1 + aspect * 1.4);
+    if (rL <= 1.6) continue; const ow = Math.max(0.8, pr * 0.16);
+    silPath(c, px, py, dir, rL + ow, pr * (1 + aspect * 0.15) + ow, pr * (1 - aspect * 0.85) + ow, true);
+  }
+  c.fillStyle = `hsl(${bH},${cl(bS)}%,${cl(bL - 28)}%)`; c.fill();
+  // NODOS: silueta + VOLUMEN (gradiente radial) + COSTILLAS. + busca la CABEZA (max lx, leve preferencia BOCA) para los ojos.
+  const bandN = 3 + ((d.hue * 7919) | 0) % 4;
+  let headX = oX, headY = oY, headR = 0, headScore = -1e9;
+  for (let k = 0; k < bp.length; k += 6) {
+    const lx = bp[k], ly = bp[k + 1], r = bp[k + 2], aspect = bp[k + 3], dir = bp[k + 4], tissue = bp[k + 5];
+    const px = oX + lx * scl, py = oY + ly * scl, pr = Math.max(1, r * scl);
+    const hs = lx + (tissue === TISSUE.MOUTH ? r : 0); if (hs > headScore) { headScore = hs; headX = px; headY = py; headR = pr; }
+    const rL = pr * (1 + aspect * 1.4), wB = pr * (1 + aspect * 0.15), wT = pr * (1 - aspect * 0.85);
+    if (rL > 1.6) silPath(c, px, py, dir, rL, wB, wT); else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
+    if (pr > 3) {   // VOLUMEN: gradiente radial luz→sombra (la luz cae arriba-izq, como en el mundo)
+      const lr = rL > pr ? rL : pr, g = c.createRadialGradient(px + LIGHT_DX * pr, py + LIGHT_DY * pr, pr * 0.15, px, py, lr * 1.03);
+      g.addColorStop(0, `hsl(${bH},${cl(bS - 12)}%,${cl(bL + 20)}%)`); g.addColorStop(0.55, `hsl(${bH},${bS}%,${bL}%)`); g.addColorStop(1, `hsl(${bH},${cl(bS + 10)}%,${cl(bL - 22)}%)`);
+      c.fillStyle = g;
+    } else c.fillStyle = `hsl(${bH},${bS}%,${bL}%)`;
+    c.fill();
+    if (tint > 0) { c.globalAlpha = tint; c.fillStyle = TCOL[tissue] || '#5a6b7a'; c.fill(); c.globalAlpha = 1; }   // «resaltar tejido»: superpone el color de FUNCIÓN al mismo % que el mundo
+    if (bandN > 1 && pr > 5) {   // COSTILLAS transversales (segmentación)
+      c.strokeStyle = `hsla(${bH},${cl(bS + 8)}%,${cl(bL - 20)}%,0.42)`; c.lineWidth = Math.max(0.6, pr * 0.12);
+      const cr = Math.cos(dir), sr = Math.sin(dir), txu = -sr, tyu = cr;
+      for (let bI = 1; bI < bandN; bI++) { const f = bI / bandN, lw = (wB + (wT - wB) * f) * 0.82, ax = (2 * f - 1) * rL, ccx = px + cr * ax, ccy = py + sr * ax, bow = lw * 0.4;
+        c.beginPath(); c.moveTo(ccx - txu * lw, ccy - tyu * lw); c.quadraticCurveTo(ccx + cr * bow, ccy + sr * bow, ccx + txu * lw, ccy + tyu * lw); c.stroke(); }
+    }
+  }
+  // OJOS (eyespot en la cabeza, mirando al frente = +x; sin ojos en el cadáver)
+  if (!dead && headR > 1.2) {
+    const vv = (d.hue * 41.7) % 1, hr = (d.hue * 9301) % 1, nEye = hr < 0.18 ? 1 : hr < 0.85 ? 2 : 3;
+    const er = headR * (0.36 - 0.045 * nEye) * (0.85 + 0.3 * vv), fo = headR * 0.20, lo = headR * 0.44;
+    for (let e = 0; e < nEye; e++) {
+      const tt = nEye === 1 ? 0 : (e / (nEye - 1)) * 2 - 1, ex = headX + fo, ey = headY + lo * tt;   // adelante (+x) + apertura lateral (±y)
+      c.fillStyle = `hsl(${(d.hue * 360) | 0},42%,19%)`; c.beginPath(); c.arc(ex, ey, er, 0, 6.283); c.fill();   // iris SIEMPRE del linaje (como en el mundo)
+      c.fillStyle = 'rgba(6,5,9,0.95)'; c.beginPath(); c.arc(ex + er * 0.18, ey, er * 0.5, 0, 6.283); c.fill();   // pupila hacia +x (mira al frente)
+      c.fillStyle = 'rgba(216,232,255,0.92)'; c.beginPath(); c.arc(ex + LIGHT_DX * er * 0.5, ey + LIGHT_DY * er * 0.5, er * 0.26, 0, 6.283); c.fill();   // glint
+    }
+  }
+  c.globalAlpha = 1;
+}
+
 // Inspector: rellena la tarjeta con el detalle EN VIVO del agente seleccionado (energía, fisiología, morfología).
 function updateInspector() {
   const card = $('inspector');
@@ -432,8 +498,10 @@ function updateInspector() {
   if (!d || d.id !== selectedId) {   // el worker lo buscó y no estaba vivo → murió
     $('inspRole').textContent = '† murió'; $('inspRole').style.color = '#8a93a0';
     $('inspE').style.width = '0%'; $('inspEtxt').textContent = 'el organismo ha muerto';
-    following = false; $('inspFollow').classList.remove('on'); return;
+    following = false; drawInspOrganism(lastDetail, true);   // deja FIJO el dibujo del cadáver (último cuerpo vivo) hasta cerrar/cambiar
+    return;
   }
+  lastDetail = d; drawInspOrganism(d, false);   // cachea el último detalle vivo (incl. geometría) y dibuja el retrato
   $('inspRole').textContent = ROLE_TXT[d.role]; $('inspRole').style.color = RCOL[d.role] || '#c3cdda';
   $('inspHue').style.background = `hsl(${(d.hue * 360) | 0},62%,58%)`;   // swatch de linaje (tono heredado) → identificar familias
   // DIETA emergente real (pasto/caza/carroña, acumulada en vida) → barra apilada + texto. Revela el OFICIO de ESTE animal.
@@ -512,7 +580,7 @@ let dragging = false, lastX = 0, lastY = 0, moved = 0;
 canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; moved = 0; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove', (e) => { if (!dragging || !WORLD) return; const sc = scaleOf();
   moved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
-  if (following && moved > 6) { following = false; $('inspFollow').classList.remove('on'); }   // tomar el control cancela el seguimiento
+  if (following && moved > 6) following = false;   // panear toma el control de la cámara: cancela el seguimiento (la selección y el retrato se mantienen)
   camX = wrap(camX - (e.clientX - lastX) / sc); camY = wrap(camY - (e.clientY - lastY) / sc); lastX = e.clientX; lastY = e.clientY; });
 canvas.addEventListener('pointerup', (e) => {
   dragging = false; canvas.classList.remove('dragging');
@@ -530,10 +598,10 @@ function pickAt(px, py) {
     let dy = Math.abs(ay[a] - wy); if (dy > size - dy) dy = size - dy;
     const d = dx * dx + dy * dy; if (d < bestD) { bestD = d; best = a; }
   }
-  if (best >= 0) { selectedId = aid[best]; worker.postMessage({ type: 'inspect', id: selectedId }); }
+  if (best >= 0) { selectedId = aid[best]; following = true; lastDetail = null; worker.postMessage({ type: 'inspect', id: selectedId }); }   // seleccionar → la cámara SIGUE (sin botón); resetea el retrato cacheado
   else deselect();
 }
-function deselect() { selectedId = -1; following = false; $('inspFollow').classList.remove('on'); worker.postMessage({ type: 'deselect' }); $('inspector').hidden = true; }
+function deselect() { selectedId = -1; following = false; lastDetail = null; worker.postMessage({ type: 'deselect' }); $('inspector').hidden = true; }
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (!WORLD) return;
   const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, sc0 = scaleOf();
   const wx = camX + (px - cw / 2) / sc0, wy = camY + (py - ch / 2) / sc0;
@@ -631,7 +699,7 @@ $('reproAsex').addEventListener('change', (e) => applyRepro(e.target));
 
 // Inspector: controles de la tarjeta
 $('inspClose').addEventListener('click', deselect);
-$('inspFollow').addEventListener('click', () => { following = !following; $('inspFollow').classList.toggle('on', following); });
+// (botón "seguir cámara" eliminado: al seleccionar un organismo la cámara lo sigue automáticamente — ver pickAt; panear lo cancela)
 window.addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hidden-panel');
   else if (e.code === 'Space') { e.preventDefault(); $('play').click(); }

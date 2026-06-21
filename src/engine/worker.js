@@ -84,10 +84,12 @@ function snapshot() {
     for (let k = 0; k < body.length; k++) { const p = body[k]; const o = po * 7; partData[o] = p.x; partData[o + 1] = p.y; partData[o + 2] = p.r; partData[o + 3] = p.tissue; partData[o + 4] = p.phase; partData[o + 5] = p.aspect; partData[o + 6] = p.dir; po++;
       const d = Math.hypot(p.x, p.y) + p.r; if (d > rad) rad = d; }
     // detalle EN VIVO del agente inspeccionado (si sigue vivo): stats fisiológicos + morfológicos para el inspector
-    if (s.serial[i] === selectedId) { const reproEi = SIM_P.reproE * s.reproK[i]; detail = { id: selectedId, role: arole[a], E: s.E[i], reproE: reproEi, gut: s.gut[i],
+    if (s.serial[i] === selectedId) { const reproEi = SIM_P.reproE * s.reproK[i];
+      const ib = []; for (let k = 0; k < body.length; k++) { const p = body[k]; ib.push(p.x, p.y, p.r, p.aspect, p.dir, p.tissue); }   // geometría del cuerpo (stride 6) → dibujarlo en la tarjeta del inspector (write-only)
+      detail = { id: selectedId, role: arole[a], E: s.E[i], reproE: reproEi, gut: s.gut[i],
       mass: s.mass[i], mouthCap: s.mouthCap[i], maxMouthR: s.maxMouthR[i], vmax: s.vmax[i], age: s.age[i], nParts: body.length, hue: s.genome[i].hue, x: s.x[i], y: s.y[i], rad,
       investE: s.investFrac[i] * reproEi, reproK: s.reproK[i],   // r/K: umbral e inversión PROPIOS (genes de historia de vida; near-neutral en la pecera cerrada)
-      dietV: s.vegIn[i], dietP: s.preyIn[i], dietS: s.scavIn[i] }; }   // dieta acumulada en vida (pasto/caza/carroña) → oficio EMERGENTE real en el inspector
+      dietV: s.vegIn[i], dietP: s.preyIn[i], dietS: s.scavIn[i], bodyParts: ib }; }   // dieta acumulada (pasto/caza/carroña) + geometría del cuerpo
   }
   partOff[n] = po;
   if (s.tick - lastHist >= HIST_EVERY) { lastHist = s.tick; histPop.push(n); histHerb.push(nHerb); histCarn.push(nCarn);
