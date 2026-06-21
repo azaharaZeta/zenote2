@@ -23,13 +23,8 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 ## Ideas de usuario (pendientes de procesar)
 > Solo un humano edita esta sección. Texto breve; el detalle se desarrolla al crear la ficha.
 
-- Sembrado inicial / slider de **Diversidad Inicial**: revisar cómo se calcula. En diversidad 0 todos los organismos
-  idénticos; creciente = diferencias crecientes por organismo; 1 = diferencias amplias. Analizar qué parámetros necesitan
-  un mínimo de viabilidad (¿fijos o con algo de random?) vs los independientes (color → random total). Proponer alternativa.
-- **Ventana de información de organismo**: dibujar el organismo dentro de la ventana; seguir SIEMPRE con cámara (eliminar el
-  botón "seguir cámara"); si el organismo muere, dejar fijo el dibujo de su cadáver hasta cerrar el visor o cambiar de organismo.
-- **UI "Colorear por"**: dejar por defecto "Natural + Tejido" y llamarlo solo "Natural", con un slider de "nivel de coloreado de
-  tejido" (hoy hardcodeado); eliminar "Natural (aspecto real)" y "Tejido + Aura"; renombrar "Oficio + aura real" → "Oficio".
+_(Sin ideas sin procesar ahora. Las tres anteriores pasaron a ficha propia: `diversidad-inicial-viabilidad.md` ·
+`ventana-inspector-organismo.md` · `colorear-por-simplificacion.md`.)_
 ---
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
