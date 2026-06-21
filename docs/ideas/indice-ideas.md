@@ -24,6 +24,7 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 > Solo un humano edita esta sección. Texto breve; el detalle se desarrolla al crear la ficha.
 - _(vacío — las pendientes se procesaron a fichas en `docs/ideas/`)_
 
+
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
 Emergencia / realismo:
 - Día/noche activable como slider (ya existe `dayNightAmp`, a 0) → ritmos de actividad, ventaja por acumular reservas.

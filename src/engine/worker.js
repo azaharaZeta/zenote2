@@ -17,9 +17,11 @@ let worldSize = START.worldSize, seedCount = START.seedCount, spawnSpread = STAR
 let world, sim, running = true, tps = RENDER_P.tps, maxSpeed = false;
 let selectedId = -1;   // serial del agente inspeccionado (-1 = ninguno); su detalle EN VIVO viaja en cada foto
 const CORPSE_LIFE = 240;   // #3 — vida visual del cadáver (ticks): ≈ lo que tarda su carroña en mineralizarse (decompose 0.02 → ~99% en ~230 ticks)
-// historiales para las gráficas (muestreados por ticks; ventana acotada). Población = valor absoluto. Nacimientos y
-// muertes = DELTA por ventana (un ritmo), de contadores ACUMULADOS del motor → guardamos su último valor para restar.
-const HIST_W = 160, HIST_EVERY = 60; const histPop = [], histHerb = [], histCarn = []; let lastHist = -1e9;
+// historiales para las gráficas. Se muestrean en FRONTERAS FIJAS de HIST_EVERY ticks (en el bucle de pasos, ver sampleHist) — NO una
+// vez por frame: así cada muestra cubre EXACTAMENTE HIST_EVERY ticks sea cual sea la velocidad (antes, a tps alto pasaban >60 ticks
+// por frame → la ventana de las series de TASA se ensanchaba → la gráfica pegaba un salto al cambiar de velocidad). Población = valor
+// absoluto. Nacimientos y muertes = DELTA por ventana (un ritmo), de contadores ACUMULADOS del motor → guardamos su último valor para restar.
+const HIST_W = 160, HIST_EVERY = 60; const histPop = [], histHerb = [], histCarn = [];
 const histSexB = [], histAsexB = [], histPred = [], histStarv = [];   // nacimientos sexual/asexual · muertes predación/inanición (por ventana)
 let lastSexB = 0, lastAsexB = 0, lastKills = 0, lastStarved = 0;
 const histMassH = [], histMassC = [];   // MASA media por oficio (herbívoro/carnívoro) en el tiempo → ver la TALLA evolucionar (#12): complementa el histograma (distribución ahora) con la trayectoria.
@@ -46,7 +48,7 @@ function init({ seed, worldSize: ws, seedCount: sc, spawnSpread: sp, diversity: 
   sim = new Sim(world, { seed: sd, cap: START.cap });
   sim.seed(seedCount, spawnSpread, diversity);
   selectedId = -1;   // el mundo nuevo no tiene al agente inspeccionado
-  histPop.length = 0; histHerb.length = 0; histCarn.length = 0; lastHist = -1e9;   // historiales limpios al (re)iniciar
+  histPop.length = 0; histHerb.length = 0; histCarn.length = 0;   // historiales limpios al (re)iniciar
   histSexB.length = 0; histAsexB.length = 0; histPred.length = 0; histStarv.length = 0; lastSexB = lastAsexB = lastKills = lastStarved = 0;
   histMassH.length = 0; histMassC.length = 0;
   // dims del mundo (cambian solo al reset). vegRef = veg máx aprox (para normalizar el color del fondo de vegetación). seed: la usada.
@@ -62,7 +64,7 @@ function snapshot() {
   // aE = energía normalizada [0,1] por agente (E/reproE) → el render atenúa a los hambrientos ("la muerte se ve venir").
   // aGazeX/Y = dirección al estímulo más saliente (mundo) · aAlert = intensidad [0,1] → el render ORIENTA y aviva los OJOS (todos sensan → todos tienen ojos).
   const ax = new Float32Array(n), ay = new Float32Array(n), ah = new Float32Array(n), aspd = new Float32Array(n), ahue = new Float32Array(n), aE = new Float32Array(n), aGazeX = new Float32Array(n), aGazeY = new Float32Array(n), aAlert = new Float32Array(n), aGrow = new Float32Array(n), arole = new Uint8Array(n), aid = new Int32Array(n), partOff = new Int32Array(n + 1), partData = new Float32Array(totalParts * 7);
-  let po = 0, nHerb = 0, nCarn = 0, detail = null, massSumH = 0, massSumC = 0;   // massSum* → masa media por oficio (serie temporal #12)
+  let po = 0, detail = null;
   // histograma del rasgo seleccionado (por bin, separado herbívoro/resto). Rango fijo + array SoA del rasgo (o caso especial nParts/hue).
   const gh = new Float32Array(HBINS), gc = new Float32Array(HBINS);
   const trng = HIST_TRAITS[histTrait] || HIST_TRAITS.mass, tlo = trng[0], tspan = (trng[1] - trng[0]) || 1;
@@ -77,7 +79,6 @@ function snapshot() {
     const dv = s.vegIn[i], dp = s.preyIn[i], ds = s.scavIn[i], dt = dv + dp + ds;
     arole[a] = roleFromDiet(dv, dp, ds);
     aGazeX[a] = s.senseX[i]; aGazeY[a] = s.senseY[i]; aAlert[a] = s.senseMag[i];   // estímulo saliente (dir mundo) + intensidad → ojos que miran/se avivan
-    if (arole[a] === 0) { nHerb++; massSumH += s.mass[i]; } else { nCarn++; massSumC += s.mass[i]; }   // masa por oficio → talla media en el tiempo
     partOff[a] = po; const body = s.body[i];
     { const tv = tArr ? tArr[i] : (histTrait === 'nParts' ? body.length : s.genome[i].hue);   // bin del rasgo (caso especial: nParts/hue)
       let hb = ((tv - tlo) / tspan * HBINS) | 0; if (hb < 0) hb = 0; else if (hb >= HBINS) hb = HBINS - 1;
@@ -94,12 +95,7 @@ function snapshot() {
       dietV: s.vegIn[i], dietP: s.preyIn[i], dietS: s.scavIn[i], bodyParts: ib }; }   // dieta acumulada (pasto/caza/carroña) + geometría del cuerpo
   }
   partOff[n] = po;
-  if (s.tick - lastHist >= HIST_EVERY) { lastHist = s.tick; histPop.push(n); histHerb.push(nHerb); histCarn.push(nCarn);
-    // ritmos por ventana: delta de los contadores acumulados desde el último muestreo
-    histSexB.push(s.sexBirths - lastSexB); histAsexB.push(s.asexBirths - lastAsexB); histPred.push(s.kills - lastKills); histStarv.push(s.starved - lastStarved);
-    lastSexB = s.sexBirths; lastAsexB = s.asexBirths; lastKills = s.kills; lastStarved = s.starved;
-    histMassH.push(nHerb ? massSumH / nHerb : 0); histMassC.push(nCarn ? massSumC / nCarn : 0);   // talla media por oficio (#12)
-    if (histPop.length > HIST_W) { histPop.shift(); histHerb.shift(); histCarn.shift(); histSexB.shift(); histAsexB.shift(); histPred.shift(); histStarv.shift(); histMassH.shift(); histMassC.shift(); } }
+  // (el historial de las gráficas ya NO se muestrea aquí: se hace en sampleHist() en fronteras fijas de HIST_EVERY ticks, ver el bucle)
   // CADÁVERES (#3): los recientes (edad < CORPSE_LIFE) con su forma → el render los desvanece con su carroña. Acotado por
   // el ring del motor; aplanado como los organismos (offset + [lx,ly,r,aspect,dir] por parte, stride 5). dcfade = edad/vida.
   const cidx = []; let ctp = 0;
@@ -122,6 +118,23 @@ function snapshot() {
      dcx.buffer, dcy.buffer, dch.buffer, dchue.buffer, dcfade.buffer, dcOff.buffer, dcData.buffer, veg.buffer, gh.buffer, gc.buffer]);
 }
 
+// Muestreo del HISTORIAL de las gráficas en FRONTERAS FIJAS de HIST_EVERY ticks (lo llama stepSim cuando s.tick cruza un múltiplo) →
+// cada muestra cubre EXACTAMENTE HIST_EVERY ticks pase lo que pase con los fps/velocidad → las gráficas no saltan al cambiar de tps.
+// Pasada propia O(cap) (barata, 1 vez cada 60 ticks). Datos write-only (no los lee step) → dorado intacto.
+function sampleHist() {
+  const s = sim; let n = 0, nHerb = 0, nCarn = 0, massSumH = 0, massSumC = 0;
+  for (let i = 0; i < s.cap; i++) if (s.alive[i] && s.body[i]) {
+    n++; if (roleFromDiet(s.vegIn[i], s.preyIn[i], s.scavIn[i]) === 0) { nHerb++; massSumH += s.mass[i]; } else { nCarn++; massSumC += s.mass[i]; }
+  }
+  histPop.push(n); histHerb.push(nHerb); histCarn.push(nCarn);
+  histSexB.push(s.sexBirths - lastSexB); histAsexB.push(s.asexBirths - lastAsexB); histPred.push(s.kills - lastKills); histStarv.push(s.starved - lastStarved);
+  lastSexB = s.sexBirths; lastAsexB = s.asexBirths; lastKills = s.kills; lastStarved = s.starved;
+  histMassH.push(nHerb ? massSumH / nHerb : 0); histMassC.push(nCarn ? massSumC / nCarn : 0);   // talla media por oficio (#12)
+  if (histPop.length > HIST_W) { histPop.shift(); histHerb.shift(); histCarn.shift(); histSexB.shift(); histAsexB.shift(); histPred.shift(); histStarv.shift(); histMassH.shift(); histMassC.shift(); }
+}
+// un paso de simulación + muestreo del historial al cruzar cada frontera de HIST_EVERY ticks (desacopla el muestreo del frame)
+function stepSim() { sim.step(); if (sim.tick % HIST_EVERY === 0) sampleHist(); }
+
 // Ritmo de simulación por ACUMULADOR temporal: cada loop ejecuta `tps × tiempo transcurrido` pasos (con la fracción
 // arrastrada) → el t/s real sigue al slider con fidelidad. Antes se hacía `round(tps/30)` pasos/loop, que (a) cuantizaba
 // a múltiplos de 30 → se pasaba (50→60) y (b) con `max(1,…)` nunca bajaba de ~30 → tps=0 NO paraba. Ahora tps=0 = parado.
@@ -134,7 +147,7 @@ function loop() {
     // MÁX: simula EN LOTE hasta que toque el próximo fotograma → t/s máximo y el render no roba tiempo (un solo snapshot
     // por lote, no uno por iteración). fps sacrificado a ~4, con suelo ≥1 fps; re-lanza ya (el lote marca el ritmo).
     const stepUntil = now + MAX_SNAP_MS;
-    do { sim.step(); } while (performance.now() < stepUntil);
+    do { stepSim(); } while (performance.now() < stepUntil);
     acc = 0; lastLoopT = now;
     snapshot();
     setTimeout(loop, 0);
@@ -143,7 +156,7 @@ function loop() {
   if (running && tps > 0) {
     acc += tps * (now - lastLoopT) / 1000;                            // ticks adeudados desde el último loop
     const budgetEnd = now + 28;                                       // tope de cómputo por frame (deja ~5 ms para snapshot)
-    while (acc >= 1) { if (performance.now() >= budgetEnd) { acc = 0; break; } sim.step(); acc -= 1; }   // si no se alcanza el ritmo → se descartan (sin spiral de deuda)
+    while (acc >= 1) { if (performance.now() >= budgetEnd) { acc = 0; break; } stepSim(); acc -= 1; }   // si no se alcanza el ritmo → se descartan (sin spiral de deuda)
   } else {
     acc = 0;                                                          // PAUSADO o tps=0: el mundo NO avanza
   }
@@ -164,7 +177,7 @@ onmessage = (e) => {
   else if (m.type === 'histTrait') { if (m.key in HIST_TRAITS) histTrait = m.key; }   // histograma: rasgo a mostrar (la UI lo elige)
   else if (m.type === 'inspect') selectedId = m.id;     // inspector: fijar agente a seguir en vivo
   else if (m.type === 'deselect') selectedId = -1;
-  else if (m.type === 'burst') { for (let k = 0; k < (m.n || 0); k++) sim.step(); snapshot(); }   // avance forzado (depuración/preview)
+  else if (m.type === 'burst') { for (let k = 0; k < (m.n || 0); k++) stepSim(); snapshot(); }   // avance forzado (depuración/preview)
 };
 
 init();
