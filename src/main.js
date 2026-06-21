@@ -198,24 +198,27 @@ function draw() {
   glowCtx.globalCompositeOperation = 'source-over'; glowCtx.globalAlpha = 1;
   for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t, false);
 
-  // A4 — BLOOM: reduce glowCv a una miniatura y reescálala ADITIVA sobre el fondo (luz que sangra). 0 = apagado. El radio del
-  // desenfoque ≈ el factor de reducción, en px de pantalla. Con factor FIJO, al acercar el organismo crecía pero el desenfoque no
-  // → el bloom se volvía imperceptible y solo quedaba el aura cruda (el defecto de escala que se veía a zoom alto). Por eso la
-  // reducción ESCALA con el zoom (bd = BLOOM_DIV·zoom): glow ~constante a cualquier zoom. A zoom 1 = BLOOM_DIV (idéntico a antes).
-  // Se dibuja en una sub-región bw×bh de bloomCv (cabe: bd ≥ BLOOM_DIV). Reescalado puro (drawImage) → compatible con TODO navegador.
+  // A4 — BLOOM: reduce glowCv a una miniatura y la reescala ADITIVA sobre el fondo (luz que sangra). 0 = apagado. El factor de
+  // reducción ESCALA con el zoom (bd = BLOOM_DIV·zoom) → el glow es una fracción ~constante del organismo a cualquier zoom (con
+  // factor fijo, al acercar se volvía imperceptible). La AMPLIACIÓN se hace DUPLICANDO el tamaño por pasos (no de un salto único):
+  // cada 2× bilinear es suave y encadenarlos equivale a una interpolación de orden alto → el resultado NO deja "rejilla" (el salto
+  // único sí, por la interpolación lineal entre texeles). Solo drawImage (sin ctx.filter) → compatible con todo navegador. Ping-pong
+  // entre los dos búferes; los intermedios son pequeños → barato. A zoom 1 (bd=BLOOM_DIV) es un solo salto, como antes.
   if (bloomStrength > 0) {
     const bd = BLOOM_DIV * (zoom > 1 ? zoom : 1);
-    const bw = Math.max(2, (canvas.width / bd) | 0), bh = Math.max(2, (canvas.height / bd) | 0);
-    const hw = Math.max(1, bw >> 1), hh = Math.max(1, bh >> 1);
+    let w = Math.max(2, (canvas.width / bd) | 0), h = Math.max(2, (canvas.height / bd) | 0);
+    const maxW = bloomCv.width, maxH = bloomCv.height;   // tope de los búferes = canvas/BLOOM_DIV
     bloomCtx.imageSmoothingEnabled = true; bloom2Ctx.imageSmoothingEnabled = true;
-    bloomCtx.clearRect(0, 0, bw, bh);
-    bloomCtx.drawImage(glowCv, 0, 0, bw, bh);                             // 1) reduce glowCv → bw×bh (promedia bloques)
-    // 2) PRE-BLUR de los texeles (mata la "rejilla" que deja el bilinear al ampliar mucho): baja a la mitad en bloom2Cv y vuelve
-    //    a subir = un desenfoque 2× extra sobre el búfer pequeño. Barato (búfer diminuto). Cross-browser (solo drawImage).
-    bloom2Ctx.clearRect(0, 0, hw, hh); bloom2Ctx.drawImage(bloomCv, 0, 0, bw, bh, 0, 0, hw, hh);
-    bloomCtx.clearRect(0, 0, bw, bh); bloomCtx.drawImage(bloom2Cv, 0, 0, hw, hh, 0, 0, bw, bh);
+    bloomCtx.clearRect(0, 0, w, h); bloomCtx.drawImage(glowCv, 0, 0, w, h);   // reduce glowCv → w×h (blur base)
+    let src = bloomCv, sctx = bloomCtx, dst = bloom2Cv, dctx = bloom2Ctx;
+    while (w * 2 <= maxW && h * 2 <= maxH) {                                  // amplía ×2 por pasos (suave) hasta el tope del búfer
+      const nw = w * 2, nh = h * 2;
+      dctx.clearRect(0, 0, nw, nh); dctx.drawImage(src, 0, 0, w, h, 0, 0, nw, nh);
+      w = nw; h = nh;
+      const ts = src; src = dst; dst = ts; const tc = sctx; sctx = dctx; dctx = tc;   // ping-pong de búferes
+    }
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = bloomStrength; ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(bloomCv, 0, 0, bw, bh, 0, 0, cw, ch);                  // 3) reescala esa sub-región a pantalla completa
+    ctx.drawImage(src, 0, 0, w, h, 0, 0, cw, ch);   // salto final a pantalla (de un búfer ya suave → sin rejilla)
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
   // organismos NÍTIDOS encima
@@ -304,7 +307,7 @@ function drawOrgs(c, oX, oY, sc, t) {   // dibuja los organismos NÍTIDOS en glo
         const ow = Math.max(0.8, pr * 0.16);   // grosor del reborde ∝ tamaño (suave)
         silPath(c, px, py, h + dir, rL + ow, pr * (1 + aspect * 0.15) + ow, pr * (1 - aspect * 0.85) + ow, true);   // append → acumula
       }
-      c.fillStyle = `hsl(${bH | 0},${cl(bS - 12)}%,${cl(bL - 40)}%)`; c.fill();   // tinte oscuro del linaje → reborde, no línea dura
+      c.fillStyle = `hsl(${bH | 0},${cl(bS)}%,${cl(bL - 28)}%)`; c.fill();   // reborde = el color del animal un poco más oscuro (sombra del propio tono, no negro)
     }
     for (let k = p1 - 1; k >= p0; k--) {
       const o = k * 7, lx = partData[o], ly = partData[o + 1], r = partData[o + 2], tissue = partData[o + 3], ph = partData[o + 4], aspect = partData[o + 5], dir = partData[o + 6];
