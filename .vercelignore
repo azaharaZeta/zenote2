@@ -1,0 +1,14 @@
+# Ficheros que SIGUEN en git/GitHub pero NO se publican en la web (zenote2.vercel.app).
+# La app sí necesita servir: index.html, styles.css, src/, vercel.json → NO listar aquí.
+
+# Documentación y notas de trabajo
+docs/
+*.md
+
+# Tests, spikes y CI (no son parte de la web)
+test/
+spikes/
+.github/
+
+# Config local del agente
+.claude/
