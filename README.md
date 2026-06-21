@@ -4,7 +4,7 @@ Simulador de **evolución emergente** en el navegador: un abismo donde la **morf
 emergen de herencia + mutación + selección sobre una física conservativa (materia cerrada · energía luz→calor). Sin
 backend y sin build — HTML/CSS/JS vanilla con el motor en un Web Worker.
 
-🌊 **Demo:** _(añadir aquí la URL de Vercel)_
+🌊 **Demo:** **<https://zenote2.vercel.app>**
 
 ## Correr en local
 ```bash

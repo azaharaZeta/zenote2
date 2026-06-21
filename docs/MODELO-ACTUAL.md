@@ -73,7 +73,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
   redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
   boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0xf5375391`; cámbialo solo con cambios de física INTENCIONADOS).
+- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0xe8984a53` — re-fijado por la HOMOLOGÍA COMPARTIDA del módulo fundador, #4; cámbialo solo con cambios de física INTENCIONADOS).
 - Memoria: `zenote2-animals-only-vegetation`.
 
 ## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)

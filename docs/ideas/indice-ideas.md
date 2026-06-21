@@ -30,7 +30,7 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
   botón "seguir cámara"); si el organismo muere, dejar fijo el dibujo de su cadáver hasta cerrar el visor o cambiar de organismo.
 - **UI "Colorear por"**: dejar por defecto "Natural + Tejido" y llamarlo solo "Natural", con un slider de "nivel de coloreado de
   tejido" (hoy hardcodeado); eliminar "Natural (aspecto real)" y "Tejido + Aura"; renombrar "Oficio + aura real" → "Oficio".
-
+- Bug: a veces alterna dibukar el sets de ojos en dos zonas distintas de un mismo organismo, como que cambia de opinión constantemente. ocurrre en organismos que parece que tienen dos cabezas. El parpadeo persiste hasta con el mundo en pausa. No me importaría que la solución fuera: dibujarlos en todas las cabezas, si es algo acotado.
 ---
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
