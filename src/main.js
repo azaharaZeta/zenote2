@@ -310,7 +310,13 @@ function drawOrgs(c, oX, oY, sc, t, halo) {
       const uy = ly + (0.35 + spd * RENDER_P.undulation) * Math.sin(t * 5 + lx * 0.16 + ph);
       const px = oX + (wx + (lx * chh - uy * shh)) * sc, py = oY + (wy + (lx * shh + uy * chh)) * sc, pr = Math.max(1, r * sc * mul);
       if (!halo) { const dx = px - bx, dy = py - by, ext = Math.hypot(dx, dy) + pr; if (ext > bodyR) bodyR = ext;
-        const hs = dx * chh + dy * shh + (tissue === TISSUE.MOUTH ? pr : 0); if (hs > headScore) { headScore = hs; headX = px; headY = py; headR = pr; } }   // cabeza = nodo más adelantado (la "cara") donde se anclan los ojos
+        // CABEZA = nodo más adelantado (proyección sobre el rumbo) + leve preferencia BOCA, donde se anclan los OJOS. Se
+        // puntúa con la coord local ADELANTE `lx`·sc, NO con dx·chh+dy·shh: ambas son IGUALES en aritmética real (la
+        // ondulación `uy` se cancela al proyectar sobre el rumbo), pero la versión en pantalla arrastra el redondeo sub-ULP
+        // de `uy` (∝sin(t)) → en cuerpos bilaterales con dos lóbulos frontales del MISMO `lx` ("dos cabezas") el empate se
+        // rompía por ese epsilon y su signo ALTERNABA con t → los ojos PARPADEABAN entre los dos lóbulos (hasta en pausa:
+        // t = tiempo de render). `lx` es constante → empate estable → cabeza fija. El nodo ganador conserva su px/py ondulado.
+        const hs = lx * sc + (tissue === TISSUE.MOUTH ? pr : 0); if (hs > headScore) { headScore = hs; headX = px; headY = py; headR = pr; } }
       // #2 — SILUETA bézier: gota/aleta/tentáculo (afila hacia afuera según `aspect`; eje = rumbo + dir). LOD: diminuta → punto.
       const rL = pr * (1 + aspect * 1.4), wB = pr * (1 + aspect * 0.15), wT = pr * (1 - aspect * 0.85);
       if (rL > 1.6) silPath(c, px, py, h + dir, rL, wB, wT);
