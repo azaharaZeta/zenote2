@@ -125,11 +125,11 @@ export class Sim {
   // evolvable; aislamiento clinal, no especies discretas — ver mateCompat y m7). -1 si no hay.
   _findMate(i) {
     const P = SIM_P, size = this.world.size, mr2 = P.mateRadius * P.mateRadius;
-    const hc = this.hash.cell, hx = (this.x[i] / hc) | 0, hy = (this.y[i] / hc) | 0;
+    const hc = this.hash.cell, hcols = this.hash.cols, hrows = this.hash.rows, hx = (this.x[i] / hc) | 0, hy = (this.y[i] / hc) | 0;
     let best = -1, bestD = mr2;
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
-      const gx = ((hx + ox) % this.hash.cols + this.hash.cols) % this.hash.cols, gy = ((hy + oy) % this.hash.rows + this.hash.rows) % this.hash.rows;
-      let j = this.hash.head[gy * this.hash.cols + gx];
+      const gx = ((hx + ox) % hcols + hcols) % hcols, gy = ((hy + oy) % hrows + hrows) % hrows;   // NO sustituir por wrap con rama: hx/hy salen de una posición f32 que puede redondear a `size` → hx=hcols (fuera de rango); solo el % lo envuelve igual (rompía m9)
+      let j = this.hash.head[gy * hcols + gx];
       while (j !== -1) { if (j !== i && this.alive[j]) {
         let dx = this.x[j] - this.x[i], dy = this.y[j] - this.y[i]; if (dx > size * 0.5) dx -= size; else if (dx < -size * 0.5) dx += size; if (dy > size * 0.5) dy -= size; else if (dy < -size * 0.5) dy += size;
         const d2 = dx * dx + dy * dy;
@@ -168,9 +168,9 @@ export class Sim {
       const cgx = (W.cover[xr] - W.cover[xl]) * 4, cgy = (W.cover[yb] - W.cover[yt]) * 4;   // ∇cobertura: hacia dónde hay más refugio (no comestible) → la conducta de refugiarse puede EVOLUCIONAR
       let preyJ = -1, preyD = 1e9, preyDX = 0, preyDY = 0, thD = 1e9, thDX = 0, thDY = 0;
       const myMass = this.mass[i], myMouth = this.mouthCap[i], myReach = this.maxMouthR[i] * P.preyMassMax;
-      { const hc = this.hash.cell, hx = (x[i] / hc) | 0, hy = (y[i] / hc) | 0;
-        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const gx = ((hx + ox) % this.hash.cols + this.hash.cols) % this.hash.cols, gy = ((hy + oy) % this.hash.rows + this.hash.rows) % this.hash.rows;
-          let j = this.hash.head[gy * this.hash.cols + gx];
+      { const hc = this.hash.cell, hcols = this.hash.cols, hrows = this.hash.rows, hx = (x[i] / hc) | 0, hy = (y[i] / hc) | 0;
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const gx = ((hx + ox) % hcols + hcols) % hcols, gy = ((hy + oy) % hrows + hrows) % hrows;   // NO sustituir por wrap con rama: hx/hy salen de posición f32 que puede redondear a `size` → hx=hcols (fuera de rango); solo el % lo envuelve igual (rompía m9)
+          let j = this.hash.head[gy * hcols + gx];
           while (j !== -1) { if (j !== i && this.alive[j]) {
             let dx = x[j] - x[i], dy = y[j] - y[i]; if (dx > size * 0.5) dx -= size; else if (dx < -size * 0.5) dx += size; if (dy > size * 0.5) dy -= size; else if (dy < -size * 0.5) dy += size;
             const d2 = dx * dx + dy * dy;

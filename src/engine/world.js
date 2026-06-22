@@ -25,7 +25,7 @@ export class World {
     this.detritusM = new Float32Array(N);  // materia orgánica muerta
     this.detritusE = new Float32Array(N);  // energía residual del detrito
     this._scratch = new Float32Array(N);
-    this._diffScratch = new Float32Array(N);   // PERF: scratch dedicado a la difusión (ping-pong) → evita el prev.set() por campo (4/tick); separado de _scratch (vegStep)
+    this._diffScratch = new Float32Array(N);   // PERF: scratch único para la difusión (ping-pong, sin copia); reusado por las 4 pasadas (2 arrays vivos/pasada → cache-friendly a cualquier N)
     this.cover = new Float32Array(N);      // COBERTURA: refugio ESTÁTICO y NO comestible (separado del alimento) → nicho SEPARABLE; la captura lo lee si coverStrength>0
     this._buildLight(seed);
     this._buildCover(seed);
@@ -144,7 +144,7 @@ export class World {
   vegStep() {
     const P = this.P, veg = this.veg, N = this.nutrient, Dm = this.detritusM, prev = this._scratch;
     const g = P.vegGrowth, kc = P.vegKcoef, ec = P.vegEcoef, dec = P.vegDecay, seed = P.vegSeed, lm = this.lightMul * this.daylight;
-    const cols = this.cols, rows = this.rows, lbase = P.lightBase || 1; let p = P.patchiness || 0; if (p > 1) p = 1;
+    const cols = this.cols, rows = this.rows, cm1 = cols - 1, lbase = P.lightBase || 1; let p = P.patchiness || 0; if (p > 1) p = 1;
     prev.set(veg);   // snapshot del tick previo → rebrote orden-independiente (como zenote1)
     for (let y = 0; y < rows; y++) {
       const up = ((y - 1 + rows) % rows) * cols, dn = ((y + 1) % rows) * cols, rw = y * cols;
@@ -155,7 +155,7 @@ export class World {
             let inc;
             if (p <= 0) inc = g * (r + seed) * (1 - r / K);                          // logístico simple
             else {                                                                    // logístico + DIFUSIÓN de semilla → parches migrantes
-              const xl = (x - 1 + cols) % cols, xr = (x + 1) % cols;
+              const xl = x === 0 ? cm1 : x - 1, xr = x === cm1 ? 0 : x + 1;   // PERF: sin % (idéntico a (x∓1+cols)%cols)
               const meanNb = (prev[rw + xl] + prev[rw + xr] + prev[up + x] + prev[dn + x]) * 0.25;
               const seeded = g * (seed + r / K + meanNb / K);                         // crece donde ya hay pasto o lo hay al lado (siembra al vecindario)
               inc = (1 - p) * (g * (r + seed) * (1 - r / K)) + p * seeded;
@@ -182,18 +182,20 @@ export class World {
     }
   }
 
-  // Difusión conservativa (4 vecinos, toro) de un campo, por PING-PONG (PERF). Identifica el campo por NOMBRE: lee del buffer
-  // actual (src), escribe en el scratch (dst) y SWAPea las referencias → byte-idéntico al Jacobi previo (mismos valores, mismo
-  // orden de lectura), pero sin el `prev.set(field)` (copia O(N) por campo × 4/tick). Nada cachea la identidad del array entre
-  // ticks (sim/worker leen W.<campo>[i] en vivo), así que reapuntar this[name] es seguro. Σ constante (conservativa).
+  // Difusión conservativa (4 vecinos, toro) de un campo, por PING-PONG (sin `prev.set`) y SIN el operador `%` por celda: split
+  // interior/borde (solo x=0 y x=cols−1 envuelven; el interior usa i±1 directos). Byte-idéntico al Jacobi previo (mismos índices
+  // vecinos, misma aritmética leyendo del buffer viejo `src`, mismo orden de suma). 4 pasadas (2 arrays vivos/pasada → cache-friendly
+  // a cualquier N; preferido a fusionar, que mantiene 8 arrays y satura L2 en mundos grandes). Σ constante. Reapuntar this[name] es
+  // seguro: sim/worker leen W.<campo>[i] en vivo (nada cachea la identidad del array entre ticks).
   _diffuse(name, rate) {
     if (rate <= 0) return;
-    const cols = this.cols, rows = this.rows, src = this[name], dst = this._diffScratch;
+    const cols = this.cols, rows = this.rows, cm1 = cols - 1, src = this[name], dst = this._diffScratch;
     for (let y = 0; y < rows; y++) {
       const up = ((y - 1 + rows) % rows) * cols, dn = ((y + 1) % rows) * cols, row = y * cols;
       for (let x = 0; x < cols; x++) {
-        const i = row + x, xl = (x - 1 + cols) % cols, xr = (x + 1) % cols;
-        const mean4 = (src[row + xl] + src[row + xr] + src[up + x] + src[dn + x]) * 0.25;
+        const i = row + x;
+        const xl = x === 0 ? row + cm1 : i - 1, xr = x === cm1 ? row : i + 1;   // idéntico a row+((x∓1+cols)%cols), sin %
+        const mean4 = (src[xl] + src[xr] + src[up + x] + src[dn + x]) * 0.25;
         dst[i] = src[i] + rate * (mean4 - src[i]);
       }
     }

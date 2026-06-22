@@ -12,3 +12,8 @@ spikes/
 
 # Config local del agente
 .claude/
+
+# Tooling de desarrollo local (la web es estática: sin build, sin backend)
+server.py
+package.json
+.gitignore
