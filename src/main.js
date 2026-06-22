@@ -423,15 +423,16 @@ function updateHud() {
 
 // Retrato RICO del organismo seleccionado en la tarjeta (mini-canvas): MISMO aspecto que en el mundo — contorno + silueta bézier
 // + sombreado VOLUMÉTRICO + costillas + ojos, RESPETANDO el modo de color activo (Natural + «resaltar tejido» al mismo % · Oficio ·
-// Linaje). Estático (sin ondulación ni heading: mira a +x). dead=true → cadáver apagado de linaje, sin ojos. Render PURO.
-// Geometría en detail.bodyParts (stride 6: lx,ly,r,aspect,dir,tissue) + d.role (modo Oficio).
+// Linaje). ONDULA como en el mundo (meneo de nado animado por el tiempo; cadáver inmóvil); mira a +x. dead=true → cadáver apagado
+// de linaje, sin ojos. Render PURO. Geometría en detail.bodyParts (stride 6: lx,ly,r,aspect,dir,tissue) + d.role (modo Oficio).
 const inspCv = document.getElementById('inspCanvas'), inspCtx = inspCv && inspCv.getContext('2d');
 function drawInspOrganism(d, dead) {
   if (!inspCtx) return;
   const c = inspCtx, W = inspCv.width, H = inspCv.height; c.clearRect(0, 0, W, H);
   const bp = d && d.bodyParts; if (!bp || !bp.length) return;
+  const t = performance.now() / 1000, swim = dead ? 0 : 0.6;   // ondulación de nado (transversal, viaja por el cuerpo); cadáver inmóvil
   let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-  for (let k = 0; k < bp.length; k += 6) { const lx = bp[k], ly = bp[k + 1], r = bp[k + 2]; if (lx - r < minX) minX = lx - r; if (lx + r > maxX) maxX = lx + r; if (ly - r < minY) minY = ly - r; if (ly + r > maxY) maxY = ly + r; }
+  for (let k = 0; k < bp.length; k += 6) { const lx = bp[k], ly = bp[k + 1], r = bp[k + 2]; if (lx - r < minX) minX = lx - r; if (lx + r > maxX) maxX = lx + r; if (ly - r - swim < minY) minY = ly - r - swim; if (ly + r + swim > maxY) maxY = ly + r + swim; }   // +swim en Y → reserva sitio para el meneo (encuadre estable, sin recorte)
   const scl = Math.min(W * 0.8 / Math.max(1, maxX - minX), H * 0.8 / Math.max(1, maxY - minY));
   const oX = W / 2 - (minX + maxX) / 2 * scl, oY = H / 2 - (minY + maxY) / 2 * scl;
   // color base del NÚCLEO según el MODO activo (igual que drawOrgs): natural/lineage = linaje · role = oficio · cadáver = linaje apagado.
@@ -445,7 +446,8 @@ function drawInspOrganism(d, dead) {
   c.beginPath();
   for (let k = 0; k < bp.length; k += 6) {
     const lx = bp[k], ly = bp[k + 1], r = bp[k + 2], aspect = bp[k + 3], dir = bp[k + 4];
-    const px = oX + lx * scl, py = oY + ly * scl, pr = Math.max(1, r * scl), rL = pr * (1 + aspect * 1.4);
+    const uy = ly + swim * Math.sin(t * 5 + lx * 0.16 + d.hue * 6.28);   // ondulación de nado (transversal), como en el mundo
+    const px = oX + lx * scl, py = oY + uy * scl, pr = Math.max(1, r * scl), rL = pr * (1 + aspect * 1.4);
     if (rL <= 1.6) continue; const ow = Math.max(0.8, pr * 0.16);
     silPath(c, px, py, dir, rL + ow, pr * (1 + aspect * 0.15) + ow, pr * (1 - aspect * 0.85) + ow, true);
   }
@@ -455,7 +457,8 @@ function drawInspOrganism(d, dead) {
   let headX = oX, headY = oY, headR = 0, headScore = -1e9;
   for (let k = 0; k < bp.length; k += 6) {
     const lx = bp[k], ly = bp[k + 1], r = bp[k + 2], aspect = bp[k + 3], dir = bp[k + 4], tissue = bp[k + 5];
-    const px = oX + lx * scl, py = oY + ly * scl, pr = Math.max(1, r * scl);
+    const uy = ly + swim * Math.sin(t * 5 + lx * 0.16 + d.hue * 6.28);   // misma ondulación que el contorno → cuerpo y nodos se mueven juntos
+    const px = oX + lx * scl, py = oY + uy * scl, pr = Math.max(1, r * scl);
     const hs = lx + (tissue === TISSUE.MOUTH ? r : 0); if (hs > headScore) { headScore = hs; headX = px; headY = py; headR = pr; }
     const rL = pr * (1 + aspect * 1.4), wB = pr * (1 + aspect * 0.15), wT = pr * (1 - aspect * 0.85);
     if (rL > 1.6) silPath(c, px, py, dir, rL, wB, wT); else { c.beginPath(); c.arc(px, py, pr, 0, 6.283); }
@@ -643,7 +646,7 @@ $('hide').addEventListener('click', () => document.body.classList.add('hidden-pa
 $('show').addEventListener('click', () => document.body.classList.remove('hidden-panel'));
 $('colorMode').addEventListener('change', (e) => { colorMode = e.target.value; $('tissueMixCtrl').hidden = colorMode !== 'natural'; buildLegend(); });
 // Nivel de tejido (solo modo Natural): tiñe el cuerpo con el color de su función según el slider. Render puro (no va al worker).
-$('tissueMix').addEventListener('input', (e) => { tissueMix = +e.target.value; $('tissueMixVal').textContent = Math.round(tissueMix * 100) + '%'; });
+$('tissueMix').addEventListener('input', (e) => { tissueMix = +e.target.value; $('tissueMixVal').textContent = Math.round(tissueMix * 100) + '%'; buildLegend(); });   // la leyenda muestra/oculta la clave de tejidos según el realce
 $('tissueMixVal').textContent = Math.round(tissueMix * 100) + '%';
 $('tissueMixCtrl').hidden = colorMode !== 'natural';
 // CALIDAD gráfica (render PURO): cambia el preset de LOD/resolución/atmósfera en vivo. Reaplica dpr (vía resize), bloom y la
@@ -706,12 +709,14 @@ window.addEventListener('keydown', (e) => {
 
 function buildLegend() {
   const L = $('legend');
-  const sets = {
-    natural: [['#7fb0d8', 'color = linaje (pigmento heredado)'], ['#e0a84a', '«Resaltar tipo tejido»: estructura·músculo·boca · segmentación · brillo = energía']],
-    role: [['#3fb98f', 'herbívoro'], ['#e0664d', 'carnívoro'], ['#e0a84a', 'omnívoro'], ['#3fb98f', '(oficio por DIETA real)']],
-    lineage: [['#e0664d', 'tono = linaje (color heredado, deriva lenta)']],
-  };
-  L.innerHTML = (sets[colorMode] || sets.natural).map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('');
+  let rows;
+  if (colorMode === 'role') rows = [['#3fb98f', 'herbívoro'], ['#e0664d', 'carnívoro'], ['#e0a84a', 'omnívoro']];
+  else if (colorMode === 'lineage') rows = [['#e0664d', 'tono = linaje (color heredado, deriva lenta)']];
+  else {   // natural: color de linaje + (si se resalta tejido) la CLAVE de los 3 tipos con sus colores reales (TCOL, fuente única)
+    rows = [['#7fb0d8', 'color = linaje (pigmento heredado)']];
+    if (tissueMix > 0) rows.push([TCOL[TISSUE.STRUCTURE], 'estructura'], [TCOL[TISSUE.MUSCLE], 'músculo'], [TCOL[TISSUE.MOUTH], 'boca']);
+  }
+  L.innerHTML = rows.map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('');
 }
 buildLegend();
 $('tpsVal').textContent = $('tps').value + ' t/s'; $('zoomVal').textContent = (+$('zoom').value).toFixed(1) + '×'; $('fpsVal').textContent = $('fps').value + ' fps';

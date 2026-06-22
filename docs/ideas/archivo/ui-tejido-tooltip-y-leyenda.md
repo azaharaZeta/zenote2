@@ -1,6 +1,18 @@
-# "Resaltar tipo tejido": tooltip demasiado largo + falta la leyenda de color
+# "Resaltar tipo tejido": tooltip demasiado largo + falta la leyenda de color — **HECHO** (2026-06-22)
 
-**Estado: ANALIZADA — lista para implementar (render/UI puro → sin dorado).**
+**Estado: IMPLEMENTADA.** Render/UI puro → sin dorado.
+
+## Implementado
+1. **Tooltip acortado** a una línea (de ~240 a 106 chars) en el slider `#tissueMix` ([index.html](../../index.html)).
+2. **Leyenda de tejido:** `buildLegend()` ([main.js](../../src/main.js)) en modo Natural añade, cuando `tissueMix > 0`, los 3 swatches
+   *estructura · músculo · boca* con sus colores reales de `TCOL` (fuente única); desaparecen a 0. La leyenda se reconstruye también
+   al mover el slider (engancha `buildLegend()` en el handler de `#tissueMix`).
+- Verificado en preview: con realce>0 la leyenda = "color = linaje … estructura · músculo · boca"; a 0% solo "color = linaje"; tooltip 106 chars.
+
+---
+_Análisis original abajo._
+
+**Estado original: ANALIZADA — lista para implementar (render/UI puro → sin dorado).**
 
 > Idea de usuario: *"Arreglar el texto informativo de 'Resaltar tipo de tejido'. Es demasiado largo, y no se ve la leyenda de
 > color por tipo de tejido."*

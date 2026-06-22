@@ -1,6 +1,19 @@
-# El organismo del inspector, en movimiento (como en el mundo)
+# El organismo del inspector, en movimiento (como en el mundo) — **HECHO** (2026-06-22)
 
-**Estado: ANALIZADA — lista para implementar (render puro → sin dorado).**
+**Estado: IMPLEMENTADA.** Render puro → sin dorado.
+
+## Implementado
+`drawInspOrganism` ([main.js](../../src/main.js)) ahora ondula como en el mundo: cada nodo añade
+`uy = ly + swim·sin(t·5 + lx·0.16 + hue·6.28)` (misma onda viajera transversal que `drawOrgs`), con `t = performance.now()/1000`
+y `swim = 0.6` (0 si cadáver → inmóvil). Aplicada igual en el bucle de contorno y en el de nodos → cuerpo y nodos se menean juntos;
+los ojos siguen a la cabeza ondulada. **Encuadre estable:** el bounding box se calcula con la geometría base + margen `swim` en Y →
+reserva sitio para el meneo, no recorta ni salta. Ya se redibujaba por frame (`updateInspector` en `draw`), así que anima solo.
+- Verificado en preview: organismo seleccionado, retrato dibujado (~6966 px) y la silueta CAMBIA entre frames (anima), área estable.
+
+---
+_Análisis original abajo._
+
+**Estado original: ANALIZADA — lista para implementar (render puro → sin dorado).**
 
 > Idea de usuario: *"Mete el movimiento del organismo en la vista de preview"* (el retrato del inspector, hoy estático).
 
