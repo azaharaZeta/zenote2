@@ -15,9 +15,9 @@ import { Sim } from '../src/engine/sim.js';
 const role = (v, p, s) => { const t = v + p + s; if (t < 0.5) return 0; const c = (p + s) / t; return c > 0.6 ? 1 : c < 0.25 ? 0 : 2; };
 function totalMatter(w, s) { let m = w.totalNutrient() + w.totalVeg() + w.totalDetritusM(); for (let i = 0; i < s.cap; i++) if (s.alive[i]) m += s.mass[i]; return m; }
 
-// Umbrales medidos. Default actual (sexual + SENESCENCIA 5e-5 + LASTRE adiposo 0.15): pop 207-217 · herb 178-194 · carn 9-21 · massMean ~6.2 · drift ~0.0004%.
-// (La senescencia baja pop/edad y drena el atesoramiento; el lastre adiposo subsidia al carroñero/omnívoro → el cazador coexiste. Histórico: sexual
-// sin knobs carn 9-25; 'both' carn 26-57.) → sólo una REGRESIÓN real (extinción del cazador, colapso de la base, bloat, fuga) los rompe.
+// Umbrales medidos. Default actual (sexual + SENESCENCIA 5e-5 + LASTRE 0.15 + COBERTURA/refugio 0.5): pop 242-322 · herb 204-285 · carn 14-27 · massMean ~6 · drift ~0.0005%.
+// (La cobertura no comestible protege a la presa → pop algo más alta, cazador coexiste; nicho separable → dispersión de talla sube. Histórico: sin cobertura
+// pop ~210; sexual sin knobs carn 9-25; 'both' carn 26-57.) → sólo una REGRESIÓN real (extinción del cazador, colapso de la base, bloat, fuga) los rompe.
 const TICKS = 15000, SEEDS = [1, 2, 3];
 const MIN_HERB = 100, MIN_CARN = 6, MIN_POP = 150, MAX_POP = 1500, MAX_MASS = 12, MAX_DRIFT = 0.1;   // carn floor 6: la sexual OBLIGADA (default) adelgaza el ápice (medido 9-25, sigue VIVO/coexiste); floor bajado para reflejar el nuevo default sin dejar de detectar extinción REAL
 

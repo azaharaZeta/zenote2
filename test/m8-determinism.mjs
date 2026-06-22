@@ -28,12 +28,14 @@ function run(ticks) {
   return { c: checksum(s), pop: s.pop(), tick: s.tick };
 }
 
-const GOLDEN = 0x2ccff67c;   // re-fijado 2026-06-21: SENESCENCIA (vejez) + LASTRE DE RESERVAS (adiposidad) ON por DEFAULT —
-                             // senesce=5e-5 (coste metabólico ∝ edad → esperanza de vida finita + recambio + drena acumuladores) y
-                             // fatWeight=0.15 (la energía almacenada pesa → vmax↓; el excedente de presa rica subsidia carroñeros).
-                             // Cambio INTENCIONADO de dinámica (pop ~210, decisión de usuario; el cazador coexiste, ver m9). Previos:
-                             // 0x55828375 (reproMode='sexual'), 0x4bcdaeaa (diversidad inicial), 0xe8984a53 (homología #4),
-                             // 0xf5375391 (coste boca), 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed). seed 1, cap 4000, 800 fund., 2000 ticks.
+const GOLDEN = 0x65f6795f;   // re-fijado 2026-06-22: RUIDO FRACTAL (fBm multi-octava) en los campos de LUZ (productividad/pasto) y COVER
+                             // (refugio) → zonas naturales irregulares en vez de pocos lóbulos lisos ("lámpara de lava"). La luz deriva (estructura
+                             // grande fluye, detalle fino casi fijo); el cover queda fractal estático. Cambia el patrón espacial → re-fija dorado.
+                             // Previos: 0xb6dce579 (cover smoothstep + sensor ∇cover, coverStrength 0.25), 0x2ccff67c (senescencia+lastre).
+                             // Cambio INTENCIONADO (la topología del cerebro cambia → todo el genoma-cerebro distinto). Nicho SEPARABLE → la
+                             // dispersión de talla sube (vs el refugio=veg que la bajaba); coexistencia OK. Previos: 0x2ccff67c (senescencia+lastre),
+                             // 0x55828375 (reproMode='sexual'), 0x4bcdaeaa (diversidad inicial), 0xe8984a53 (homología #4), 0xf5375391 (coste boca),
+                             // 0xebd987f9 (r/K dial→gen), 0xe5d3f569 (fleeSpeed). seed 1, cap 4000, 800 fund., 2000 ticks.
 const TICKS = 2000;
 console.log('=== Checksum dorado — determinismo + deriva ===\n');
 const a = run(TICKS), b = run(TICKS);

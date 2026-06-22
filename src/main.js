@@ -6,7 +6,7 @@ import { RENDER_P, START, SIM_P, GENOME_P, WORLD_P, QUALITY } from './config.js'
 
 const worker = new Worker(new URL('./engine/worker.js', import.meta.url), { type: 'module' });
 let WORLD = null, frame = null;
-worker.onmessage = (e) => { const m = e.data; if (m.type === 'world') { WORLD = m; resetCamera(); } else if (m.type === 'frame') { frame = m; if (m.veg) bakeVeg(m.veg); } };   // el fondo = campo de VEGETACIÓN (llega cada frame; fluye con la luz)
+worker.onmessage = (e) => { const m = e.data; if (m.type === 'world') { WORLD = m; resetCamera(); bakeCover(); } else if (m.type === 'frame') { frame = m; if (m.veg) bakeVeg(m.veg); } };   // el fondo = VEGETACIÓN (cada frame, fluye) + COBERTURA estática (refugio, una vez en 'world')
 
 const canvas = document.getElementById('world'), ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
@@ -15,10 +15,8 @@ let cw = 0, ch = 0, vignette = null;
 // de él. 'baja' = móvil/equipos lentos. Cambiable en vivo (setQuality) sin tocar la simulación → el dorado nunca se mueve.
 let quality = RENDER_P.quality, Q = QUALITY[quality] || QUALITY.alta;
 let dpr = Math.min(Q.dprCap, window.devicePixelRatio || 1);
-// A4 — BLOOM (bioluminiscencia): la capa de ORGANISMOS se dibuja en un búfer aparte (glowCv); su versión REDUCIDA (bloomCv) se
-// reescala aditiva sobre el fondo → luz suave que sangra. El factor de reducción ESCALA con el zoom (ver draw) → el glow es una
-// fracción ~constante del organismo a cualquier zoom. Se hace por REESCALADO (drawImage), compatible con TODOS los navegadores
-// — NO con ctx.filter blur (Safari < 16.4 lo ignora → sin glow). bloomStrength=0 lo apaga (Baja/móvil). Render PURO. Como en v1.
+// BLOOM: la capa de organismos (glowCv) reducida + reescalada aditiva → glow suave; factor ∝ zoom; por downsample/drawImage
+// (compatible con todos los navegadores, NO ctx.filter blur). bloomStrength=0 lo apaga (Baja/móvil).
 const glowCv = document.createElement('canvas'), glowCtx = glowCv.getContext('2d');
 const bloomCv = document.createElement('canvas'), bloomCtx = bloomCv.getContext('2d');
 const bloom2Cv = document.createElement('canvas'), bloom2Ctx = bloom2Cv.getContext('2d');   // 2º búfer del bloom: pre-blur del búfer pequeño (suaviza la "rejilla" del reescalado)
@@ -28,11 +26,24 @@ let bloomStrength = RENDER_P.bloom * Q.bloom; const BLOOM_DIV = RENDER_P.bloomDi
 // Fluye con la luz (su K sigue al campo de luz, que puede derivar — "Corriente del abismo").
 const vegCv = document.createElement('canvas');
 let depthField = null;   // NEBULOSA DE PROFUNDIDAD: campo grande frío↔cálido (toroidal, estático) fundido en el bake de la veg → el abismo no es un teal plano
+let vegBlurA = null, vegBlurB = null;   // scratch para el blur toroidal del veg en el render (suaviza la rejilla; persistente entre frames)
 function bakeVeg(veg) {
   if (!WORLD) return;
-  // normaliza por la veg en pie TÍPICA (≈ ref·0.25), no por el máximo teórico — el pastoreo la mantiene bien por debajo de K,
-  // así que normalizar por K la dejaría casi negra. sqrt para realzar las zonas ralas.
-  const cols = WORLD.cols, rows = WORLD.rows, ref = (WORLD.vegRef || 10) * 0.25;
+  // CONTRASTE AUTO: normaliza por el relieve del campo (media + desviación, con suelo del denominador) → revela regiones ricas/pobres sin amplificar ruido.
+  const cols = WORLD.cols, rows = WORLD.rows, N = cols * rows;
+  // BLUR toroidal ligero (render): suaviza la rejilla → orgánico.
+  if (!vegBlurA || vegBlurA.length !== N) { vegBlurA = new Float32Array(N); vegBlurB = new Float32Array(N); }
+  vegBlurA.set(veg);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 0; y < rows; y++) { const yp = (y - 1 + rows) % rows, yn = (y + 1) % rows;
+      for (let x = 0; x < cols; x++) { const xp = (x - 1 + cols) % cols, xn = (x + 1) % cols;
+        vegBlurB[y * cols + x] = (vegBlurA[yp * cols + xp] + vegBlurA[yp * cols + x] + vegBlurA[yp * cols + xn] + vegBlurA[y * cols + xp] + vegBlurA[y * cols + x] + vegBlurA[y * cols + xn] + vegBlurA[yn * cols + xp] + vegBlurA[yn * cols + x] + vegBlurA[yn * cols + xn]) / 9;
+      } }
+    const t = vegBlurA; vegBlurA = vegBlurB; vegBlurB = t;
+  }
+  const vf = vegBlurA;
+  let sum = 0, sumsq = 0; for (let i = 0; i < N; i++) { const v = vf[i]; sum += v; sumsq += v * v; }
+  const mean = sum / N, sd = Math.sqrt(Math.max(0, sumsq / N - mean * mean)), denom = Math.max(2.0 * sd, 0.4 * mean) || 1;
   vegCv.width = cols; vegCv.height = rows;
   const lc = vegCv.getContext('2d'), img = lc.createImageData(cols, rows), d = img.data;
   // campo de profundidad frío↔cálido (estático, una vez por tamaño): sumas de senos con ciclos ENTEROS → tesela sin costura en el toro.
@@ -44,12 +55,36 @@ function bakeVeg(veg) {
       depthField[yy * cols + xx] = 0.5 + 0.5 * (dd < -1 ? -1 : dd > 1 ? 1 : dd);   // 0 frío (azul casi negro) .. 1 cálido (índigo/violeta)
     }
   }
-  for (let i = 0; i < cols * rows; i++) {
-    // realce del pasto tenue: exponente bajo (^0.45) sube los mids → hasta el pasto ralo brilla (como zenote1). Incremento TEAL
-    // (verde-azulado) sobre abismo azul oscuro, no verde puro → la estética acuática que tenía zenote1.
-    const v = Math.pow(Math.max(0, Math.min(1, veg[i] / ref)), 0.45), o = i * 4, dep = depthField[i];
-    // base del abismo MODULADA por profundidad (frío=azul casi negro · cálido=índigo/violeta, sutil) + incremento TEAL por vegetación.
-    d[o] = 4 + dep * 8 + v * 12; d[o + 1] = 9 + dep * 3 + v * 86; d[o + 2] = 15 + dep * 12 + v * 82; d[o + 3] = 255;
+  for (let i = 0; i < N; i++) {
+    // contraste estirado: z = exceso sobre la media / relieve → b∈[0,1] (rico→1 azul luminoso · pobre→0 abismo oscuro). ^0.7 = curva suave.
+    let z = (vf[i] - mean) / denom, b = 0.5 + 0.5 * z; b = b < 0 ? 0 : b > 1 ? 1 : b; b = Math.pow(b, 0.7);
+    const o = i * 4, dep = depthField[i];
+    // PASTO: interpola ABISMO(b=0)→PASTO(b=1) por riqueza local (colores de config, hex editable) + nebulosa de profundidad sutil.
+    d[o] = ABYSS[0] + (PASTO[0] - ABYSS[0]) * b + dep * 3; d[o + 1] = ABYSS[1] + (PASTO[1] - ABYSS[1]) * b + dep * 3; d[o + 2] = ABYSS[2] + (PASTO[2] - ABYSS[2]) * b + dep * 6; d[o + 3] = 255;
+  }
+  lc.putImageData(img, 0, 0);
+}
+// COBERTURA = refugio (campo `cover` estático, llega una vez en 'world'): se hornea como una capa de ESPESURA oscura verde-oliva
+// (distinta del teal de la vegetación-comida) → los parches de refugio se LEEN como matorral/sombra donde la presa se esconde.
+// Alpha ∝ cover^0.6 → el agua abierta queda casi sin teñir, los parches densos se ven. Estática (no toca la sim; render puro).
+const coverCv = document.createElement('canvas');
+function bakeCover() {
+  if (!WORLD || !WORLD.cover) return;
+  const cols = WORLD.cols, rows = WORLD.rows, N = cols * rows;
+  // BLUR TOROIDAL del campo (render puro, no toca la sim) → parches ORGÁNICOS sin los bloques de la rejilla coarse. 3 pasadas 3×3.
+  let a = Float32Array.from(WORLD.cover), b = new Float32Array(N);
+  for (let pass = 0; pass < 3; pass++) {
+    for (let y = 0; y < rows; y++) { const yp = (y - 1 + rows) % rows, yn = (y + 1) % rows;
+      for (let x = 0; x < cols; x++) { const xp = (x - 1 + cols) % cols, xn = (x + 1) % cols;
+        b[y * cols + x] = (a[yp * cols + xp] + a[yp * cols + x] + a[yp * cols + xn] + a[y * cols + xp] + a[y * cols + x] + a[y * cols + xn] + a[yn * cols + xp] + a[yn * cols + x] + a[yn * cols + xn]) / 9;
+      } }
+    const t = a; a = b; b = t;
+  }
+  coverCv.width = cols; coverCv.height = rows;
+  const lc = coverCv.getContext('2d'), img = lc.createImageData(cols, rows), d = img.data;
+  for (let i = 0; i < N; i++) { const c = a[i] <= 0 ? 0 : a[i] > 1 ? 1 : a[i], o = i * 4;
+    // REFUGIO = verde alga (color de config, hex editable) → 3ª zona legible. Opacidad ∝ espesura, capada por refugioAlpha.
+    d[o] = REFUGIO[0]; d[o + 1] = REFUGIO[1]; d[o + 2] = REFUGIO[2]; d[o + 3] = (Math.min(RENDER_P.refugioAlpha, 1.1 * Math.pow(c, 0.7)) * 255) | 0;
   }
   lc.putImageData(img, 0, 0);
 }
@@ -72,6 +107,9 @@ const scaleOf = () => fitScale() * zoom;
 function wrap(v) { const S = WORLD.size; return ((v % S) + S) % S; }
 
 const TCOL = [ '#5a6b7a', '#e0664d', '#e0a84a' ];   // STRUCTURE, MUSCLE, MOUTH (índice = tissue)
+// PALETA del fondo (hex de config → RGB). El fondo interpola ABISMO→PASTO según riqueza local; el REFUGIO se superpone con su color.
+const hexRGB = (h) => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const ABYSS = hexRGB(RENDER_P.abyssColor), PASTO = hexRGB(RENDER_P.pastoColor), REFUGIO = hexRGB(RENDER_P.refugioColor);
 const RCOL = [ '#3fb98f', '#e0664d', '#e0a84a' ];   // rol (por dieta): 0 herbívoro · 1 carnívoro · 2 omnívoro
 // Equivalente HSL [h,s,l] de RCOL → para el SOMBREADO VOLUMÉTRICO del modo Oficio (necesita el color numérico para derivar luz/sombra).
 const RCOL_HSL = [ [159, 49, 49], [10, 70, 59], [38, 71, 58] ];
@@ -107,8 +145,7 @@ function drawSnow(oX, oY, sc, t) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }
-// PLANCTON / micro-flora: chispas glow FIJAS que FLORECEN donde hay vegetación (algas) → vida y textura del sustrato (como v1).
-// Densidad "por cantidad": zona frondosa = casi todas encienden; pastada = casi ninguna (umbral por mota). Aditivo. Render puro.
+// PLANCTON / micro-flora: chispas glow fijas que florecen donde hay vegetación (densidad por cantidad: frondoso → casi todas, pastado → casi ninguna). Aditivo.
 let plankton = null, sparkSprites = null;
 function makeSparkSprite(hue) {
   const S = 20, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'), r = S / 2;
@@ -197,12 +234,8 @@ function draw() {
   glowCtx.globalCompositeOperation = 'source-over'; glowCtx.globalAlpha = 1;
   for (let tx = txMin; tx <= txMax; tx++) for (let ty = tyMin; ty <= tyMax; ty++) drawOrgs(glowCtx, (tx * size - camX) * sc + cw / 2, (ty * size - camY) * sc + ch / 2, sc, t);
 
-  // A4 — BLOOM: reduce glowCv a una miniatura y la reescala ADITIVA sobre el fondo (luz que sangra). 0 = apagado. El factor de
-  // reducción ESCALA con el zoom (bd = BLOOM_DIV·zoom) → el glow es una fracción ~constante del organismo a cualquier zoom (con
-  // factor fijo, al acercar se volvía imperceptible). La AMPLIACIÓN se hace DUPLICANDO el tamaño por pasos (no de un salto único):
-  // cada 2× bilinear es suave y encadenarlos equivale a una interpolación de orden alto → el resultado NO deja "rejilla" (el salto
-  // único sí, por la interpolación lineal entre texeles). Solo drawImage (sin ctx.filter) → compatible con todo navegador. Ping-pong
-  // entre los dos búferes; los intermedios son pequeños → barato. A zoom 1 (bd=BLOOM_DIV) es un solo salto, como antes.
+  // BLOOM: reduce glowCv a miniatura y la reescala ADITIVA sobre el fondo (luz que sangra); factor de reducción ∝ zoom.
+  // Amplía ×2 por pasos (cada bilinear suave → sin "rejilla"); solo drawImage (compatible con todo navegador), ping-pong barato.
   if (bloomStrength > 0) {
     const bd = BLOOM_DIV * (zoom > 1 ? zoom : 1);
     let w = Math.max(2, (canvas.width / bd) | 0), h = Math.max(2, (canvas.height / bd) | 0);
@@ -249,6 +282,7 @@ function drawVeg(oX, oY, sc) {
   const wpx = WORLD.size * sc;
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(vegCv, oX, oY, wpx, wpx);
+  if (coverCv.width) ctx.drawImage(coverCv, oX, oY, wpx, wpx);   // COBERTURA: espesura del refugio sobre el fondo de vegetación (mismo tile toroidal)
 }
 
 // CADÁVERES (#3): cuerpos muertos recientes, en su orientación final (sin ondulación ni ojos), tono del linaje muy
@@ -607,7 +641,7 @@ function deselect() { selectedId = -1; following = false; lastDetail = null; wor
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); if (!WORLD) return;
   const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, sc0 = scaleOf();
   const wx = camX + (px - cw / 2) / sc0, wy = camY + (py - ch / 2) / sc0;
-  setZoom(zoom * Math.exp(-e.deltaY * 0.0020));   // sensibilidad de la rueda (mayor = más zoom por muesca)
+  setZoom(zoom * Math.exp(-e.deltaY * 0.0060));   // sensibilidad de la rueda (mayor = más zoom por muesca)
   const sc1 = scaleOf(); camX = wrap(wx - (px - cw / 2) / sc1); camY = wrap(wy - (py - ch / 2) / sc1);
 }, { passive: false });
 

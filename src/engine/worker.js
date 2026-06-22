@@ -17,18 +17,14 @@ let worldSize = START.worldSize, seedCount = START.seedCount, spawnSpread = STAR
 let world, sim, running = true, tps = RENDER_P.tps, maxSpeed = false;
 let selectedId = -1;   // serial del agente inspeccionado (-1 = ninguno); su detalle EN VIVO viaja en cada foto
 const CORPSE_LIFE = 240;   // #3 — vida visual del cadáver (ticks): ≈ lo que tarda su carroña en mineralizarse (decompose 0.02 → ~99% en ~230 ticks)
-// historiales para las gráficas. Se muestrean en FRONTERAS FIJAS de HIST_EVERY ticks (en el bucle de pasos, ver sampleHist) — NO una
-// vez por frame: así cada muestra cubre EXACTAMENTE HIST_EVERY ticks sea cual sea la velocidad (antes, a tps alto pasaban >60 ticks
-// por frame → la ventana de las series de TASA se ensanchaba → la gráfica pegaba un salto al cambiar de velocidad). Población = valor
-// absoluto. Nacimientos y muertes = DELTA por ventana (un ritmo), de contadores ACUMULADOS del motor → guardamos su último valor para restar.
+// historiales para las gráficas. Se muestrean en FRONTERAS FIJAS de HIST_EVERY ticks (ver sampleHist), no por frame → cada muestra cubre
+// los mismos ticks a cualquier velocidad. Población = valor absoluto; nacimientos/muertes = DELTA por ventana (de contadores acumulados, restando el último).
 const HIST_W = 160, HIST_EVERY = 60; const histPop = [], histHerb = [], histCarn = [];
 const histSexB = [], histAsexB = [], histPred = [], histStarv = [];   // nacimientos sexual/asexual · muertes predación/inanición (por ventana)
 let lastSexB = 0, lastAsexB = 0, lastKills = 0, lastStarved = 0;
 const histMassH = [], histMassC = [];   // MASA media por oficio (herbívoro/carnívoro) en el tiempo → ver la TALLA evolucionar (#12): complementa el histograma (distribución ahora) con la trayectoria.
-// HISTOGRAMA de un rasgo seleccionable: se computa AQUÍ (donde están los datos SoA) y al cliente solo viajan los bins.
-// Por bin se separa por oficio (herbívoro vs resto, como la gráfica de población) → se VE la diferenciación de nicho (p.ej. boca:
-// herbívoros bajos, carnívoros altos) y la (no) deriva de un gen (p.ej. reproK/investFrac agrupados = r/K near-neutral). Rango FIJO
-// por rasgo → la distribución deriva sobre un eje estable = prueba VISUAL de la selección. (Sin coste relevante: bins de ~500 agentes.)
+// HISTOGRAMA de un rasgo seleccionable: se computa AQUÍ (datos SoA) y al cliente solo viajan los bins. Por bin se separa por oficio
+// (herbívoro vs resto) → se VE la diferenciación de nicho; rango FIJO por rasgo → la distribución deriva sobre un eje estable.
 const HBINS = 28;
 const HIST_TRAITS = { mass: [0, 16], mouthCap: [0, 40], vmax: [0, 2], nParts: [1, 32], reproK: [0.5, 2], investFrac: [0.2, 0.8], hue: [0, 1] };
 let histTrait = 'mass';   // rasgo mostrado (lo fija la UI vía mensaje 'histTrait')
@@ -52,13 +48,13 @@ function init({ seed, worldSize: ws, seedCount: sc, spawnSpread: sp, diversity: 
   histSexB.length = 0; histAsexB.length = 0; histPred.length = 0; histStarv.length = 0; lastSexB = lastAsexB = lastKills = lastStarved = 0;
   histMassH.length = 0; histMassC.length = 0;
   // dims del mundo (cambian solo al reset). vegRef = veg máx aprox (para normalizar el color del fondo de vegetación). seed: la usada.
-  postMessage({ type: 'world', cols: world.cols, rows: world.rows, cellW: world.cellW, size: worldSize, vegRef: world.P.vegKcoef * world.P.lightBase, seed: sd });
+  postMessage({ type: 'world', cols: world.cols, rows: world.rows, cellW: world.cellW, size: worldSize, vegRef: world.P.vegKcoef * world.P.lightBase, seed: sd, cover: world.cover.slice() });   // cover: campo de refugio ESTÁTICO → se manda UNA vez (no cada frame); el render lo pinta como espesura
 }
 
 // Foto por frame: solo vivos, cuerpos aplanados (offset + [lx,ly,r,tissue] por parte). Transferible (cero copia).
 function snapshot() {
   const s = sim, idx = []; let totalParts = 0;
-  for (let i = 0; i < s.cap; i++) if (s.alive[i] && s.body[i]) { idx.push(i); totalParts += s.body[i].length; }
+  for (let i = 0; i < s.hi; i++) if (s.alive[i] && s.body[i]) { idx.push(i); totalParts += s.body[i].length; }   // PERF: marca de agua (todo vivo ∈ [0,hi))
   const n = idx.length;
   // partData = [lx, ly, r, tissue, phase, aspect, dir] por nodo (stride 7): aspect+dir → siluetas orientadas en el render.
   // aE = energía normalizada [0,1] por agente (E/reproE) → el render atenúa a los hambrientos ("la muerte se ve venir").
@@ -118,12 +114,10 @@ function snapshot() {
      dcx.buffer, dcy.buffer, dch.buffer, dchue.buffer, dcfade.buffer, dcOff.buffer, dcData.buffer, veg.buffer, gh.buffer, gc.buffer]);
 }
 
-// Muestreo del HISTORIAL de las gráficas en FRONTERAS FIJAS de HIST_EVERY ticks (lo llama stepSim cuando s.tick cruza un múltiplo) →
-// cada muestra cubre EXACTAMENTE HIST_EVERY ticks pase lo que pase con los fps/velocidad → las gráficas no saltan al cambiar de tps.
-// Pasada propia O(cap) (barata, 1 vez cada 60 ticks). Datos write-only (no los lee step) → dorado intacto.
+// Muestreo del HISTORIAL en fronteras fijas de HIST_EVERY ticks (lo llama stepSim al cruzar un múltiplo). Pasada O(cap) barata; write-only (step no lo lee).
 function sampleHist() {
   const s = sim; let n = 0, nHerb = 0, nCarn = 0, massSumH = 0, massSumC = 0;
-  for (let i = 0; i < s.cap; i++) if (s.alive[i] && s.body[i]) {
+  for (let i = 0; i < s.hi; i++) if (s.alive[i] && s.body[i]) {   // PERF: marca de agua (todo vivo ∈ [0,hi))
     n++; if (roleFromDiet(s.vegIn[i], s.preyIn[i], s.scavIn[i]) === 0) { nHerb++; massSumH += s.mass[i]; } else { nCarn++; massSumC += s.mass[i]; }
   }
   histPop.push(n); histHerb.push(nHerb); histCarn.push(nCarn);
@@ -135,9 +129,7 @@ function sampleHist() {
 // un paso de simulación + muestreo del historial al cruzar cada frontera de HIST_EVERY ticks (desacopla el muestreo del frame)
 function stepSim() { sim.step(); if (sim.tick % HIST_EVERY === 0) sampleHist(); }
 
-// Ritmo de simulación por ACUMULADOR temporal: cada loop ejecuta `tps × tiempo transcurrido` pasos (con la fracción
-// arrastrada) → el t/s real sigue al slider con fidelidad. Antes se hacía `round(tps/30)` pasos/loop, que (a) cuantizaba
-// a múltiplos de 30 → se pasaba (50→60) y (b) con `max(1,…)` nunca bajaba de ~30 → tps=0 NO paraba. Ahora tps=0 = parado.
+// Ritmo de simulación por ACUMULADOR temporal: cada loop ejecuta `tps × tiempo transcurrido` pasos (con la fracción arrastrada) → el t/s real sigue al slider; tps=0 = parado.
 let acc = 0, lastLoopT = performance.now();
 const MAX_SNAP_MS = RENDER_P.maxSnapMs;   // en MÁX: un fotograma cada ~N ms (≈4 fps). Se SACRIFICAN fps para dar casi todo
                            // el tiempo a la simulación; el lote (≤N ms) garantiza ≥1 fps (el mínimo pedido) aun con la pop al tope.

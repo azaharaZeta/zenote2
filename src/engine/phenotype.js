@@ -36,11 +36,8 @@ export function computePhenotype(parts) {
   };
 }
 
-// Lectura del "oficio" MORFOLÓGICO (NO afecta a la sim; para color/diagnóstico/fallback). Todos animales → el eje es
-// herbívoro↔carnívoro. Proxy: cuánta presa ANIMAL puede manejar su boca relativa a su propia masa (maxMouthR·preyMassMax/masa,
-// preyMassMax≈1.6 como en sim). Boca grande relativa = carnívoro; chica = herbívoro (pastador); intermedio = omnívoro. El oficio
-// REALIZADO (dieta veg/caza/carroña) lo miden el worker (roleFromDiet) y el inspector — ese eje DIETARIO es el de la app.
-// Esta lectura MORFOLÓGICA (proxy boca/masa) NO la importan worker/inspector/tests: solo los spikes de exploración (postzygotic, veg-refactor).
+// Lectura del "oficio" MORFOLÓGICO (NO afecta a la sim; proxy boca/masa para diagnóstico). El oficio REALIZADO (dieta veg/caza/carroña),
+// que es el eje de la app, lo miden el worker (roleFromDiet) y el inspector; esta lectura morfológica solo la usan los spikes.
 const ROLE_NAMES = ['herbivoro', 'carnivoro', 'omnivoro'];
 export function trophicCode(mouthCap, maxMouthR, mass) {   // 0 herbívoro · 1 carnívoro · 2 omnívoro
   if (mouthCap <= 1e-6) return 0;                          // sin boca útil → pastador por defecto

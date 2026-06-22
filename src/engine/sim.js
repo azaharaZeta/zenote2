@@ -37,22 +37,21 @@ export class Sim {
     this.reproK = new Float32Array(cap); this.investFrac = new Float32Array(cap);
     this.free = new Int32Array(cap); for (let i = 0; i < cap; i++) this.free[i] = cap - 1 - i; this.freeTop = cap;
     this.active = new Int32Array(cap); this.nA = 0;
-    // M4: la celda del hash = mayor alcance que el barrido 3×3 debe cubrir. Derivada (no hardcodeada): el piso 60 es
-    // el alcance de sensado de presa/amenaza; mateRadius (búsqueda de pareja) la eleva si lo supera → así el barrido
-    // nunca falla en silencio. Hoy mateRadius=50 < 60 → celda 60 (igual que antes).
+    // PERF: MARCA DE AGUA del pool = (slot vivo más alto observado)+1. Los slots se reparten 0,1,2… (free LIFO) → todo vivo cae en
+    // [0,hi). Escanear [0,hi) en vez de [0,cap) hace los barridos O(pop pico), no O(cap) → clave en mundos grandes con cap alto y
+    // pop baja. Solo CRECE (monótona); es metadato write-only (la dinámica no la lee) → byte-idéntico (mismos slots, mismo orden).
+    this.hi = 0;
+    this._grazeBuf = new Float64Array(289);   // PERF: caché de grazable() del área de forrajeo (índice lineal por orden dy,dx); ≤ (2·8+1)² → sin asignar en caliente.
+    // Float64 a propósito: grazable() devuelve un DOUBLE; cachearlo en f32 lo truncaría y la depleción diferiría de la ruta de recálculo (rompería el dorado).
+    // celda del hash = mayor alcance del barrido 3×3 (derivada): piso 60 = sensado de presa/amenaza; mateRadius la eleva si lo supera.
     this.hash = new SpatialHash(world.size, Math.max(60, SIM_P.mateRadius)); this.hash.setCapacity(cap);
     this.kills = 0; this.sexBirths = 0; this.asexBirths = 0; this.starved = 0;   // instrumentación: depredación · vía reproductiva · muertes por inanición (causas de muerte = kills + starved)
     this.scavenged = 0;   // instrumentación: energía total rebañada del detrito (carroñeo) — para medir el flujo del nicho
-    // INGRESO POR AGENTE (acumulativo): de dónde saca la energía cada animal → pasto (veg) / caza / carroña. Solo ESCRITURA
-    // (la dinámica no lo lee) → byte-idéntico. Revela el OFICIO real emergente (herbívoro/carnívoro/carroñero) para medir y para el inspector.
+    // INGRESO POR AGENTE (acumulado por vía: pasto / caza / carroña) → revela el oficio real emergente; write-only (la dinámica no lo lee).
     this.vegIn = new Float32Array(cap); this.preyIn = new Float32Array(cap); this.scavIn = new Float32Array(cap);
-    // PERCEPCIÓN POR AGENTE (solo ESCRITURA, como vegIn → byte-idéntico): dirección unitaria al estímulo más saliente
-    // (senseX/Y, mundo) + intensidad [0,1] (senseMag). Lo escribe el sensado del cerebro; lo lee el render para ORIENTAR y
-    // AVIVAR los ojos (todos los organismos sensan → todos tienen ojos; miran a su presa/amenaza). La dinámica nunca lo lee.
+    // PERCEPCIÓN POR AGENTE: dir unitaria al estímulo saliente (senseX/Y) + intensidad (senseMag) → el render orienta/aviva los ojos; write-only.
     this.senseX = new Float32Array(cap); this.senseY = new Float32Array(cap); this.senseMag = new Float32Array(cap);
-    // CADÁVERES (#3): buffer CIRCULAR acotado de muertes recientes (forma + posición + linaje + rumbo + tick de muerte) →
-    // el render dibuja cuerpos que se desvanecen con su carroña ("muerte visible"). Solo lo ESCRIBE el motor / lo LEE el
-    // snapshot; la dinámica no lo lee → byte-idéntico. Preasignado (sin asignaciones en el bucle caliente).
+    // CADÁVERES: buffer CIRCULAR acotado de muertes recientes (forma + posición + linaje + rumbo + tick) → el render los desvanece con su carroña; write-only, preasignado.
     this.CORPSE_CAP = 400; this.CORPSE_MAXP = 32;   // 32 = GENOME_P.partBudget (tope de partes por cuerpo)
     this.ccx = new Float32Array(this.CORPSE_CAP); this.ccy = new Float32Array(this.CORPSE_CAP); this.cch = new Float32Array(this.CORPSE_CAP);
     this.cchue = new Float32Array(this.CORPSE_CAP); this.cct0 = new Float32Array(this.CORPSE_CAP); this.ccn = new Int32Array(this.CORPSE_CAP);
@@ -85,6 +84,7 @@ export class Sim {
 
   spawn(genome, x, y, E, parts = null, ph = null) {
     if (this.freeTop === 0) return -1; const i = this.free[--this.freeTop];
+    if (i >= this.hi) this.hi = i + 1;   // PERF: actualiza la marca de agua del pool (ver constructor)
     this.alive[i] = 1; this.serial[i] = ++this._serial; this.genome[i] = genome;
     this.reproK[i] = genome.reproK != null ? genome.reproK : 1.0; this.investFrac[i] = genome.investFrac != null ? genome.investFrac : 0.4375;   // r/K: cachea los genes de historia de vida al nacer
     if (this.freezeBrain && genome.brain) genome.brain.set(this._seedBrain);   // control: anula la herencia/mutación del cerebro → todos usan el seedBrain canónico
@@ -143,7 +143,7 @@ export class Sim {
   step() {
     const W = this.world, rng = this.rng, size = W.size, P = SIM_P;
     W.setDayNight(this.tick); W.stepLight(this.tick);   // corriente del abismo: el campo de luz puede derivar en el tiempo
-    let na = 0; for (let i = 0; i < this.cap; i++) if (this.alive[i]) this.active[na++] = i; this.nA = na;
+    let na = 0; for (let i = 0; i < this.hi; i++) if (this.alive[i]) this.active[na++] = i; this.nA = na;   // PERF: O(pop pico) vía marca de agua (idéntica lista ascendente: todo vivo ∈ [0,hi))
     this.hash.clear();
     for (let a = 0; a < na; a++) { const i = this.active[a]; this.hash.insert(i, this.x[i], this.y[i]); }
 
@@ -163,10 +163,9 @@ export class Sim {
       const xl = cx > 0 ? cell - 1 : cell + (cols - 1), xr = cx < cols - 1 ? cell + 1 : cell - (cols - 1);
       const yt = cy > 0 ? cell - cols : cell + (rows - 1) * cols, yb = cy < rows - 1 ? cell + cols : cell - (rows - 1) * cols;
       const lgx = (W.veg[xr] - W.veg[xl]) * 2, lgy = (W.veg[yb] - W.veg[yt]) * 2;   // ∇vegetación: hacia dónde hay más comida (pasto)
-      // #4 — ∇detritusE (olor a carroña): gradiente de energía residual hacia celdas vecinas. K=20 mapea un gradiente
-      // típico (stock ~0.02/celda) a un rango útil para tanh; se acota a [-1,1] como ∇luz. Permite que la conducta
-      // carroñera EVOLUCIONE a rastrear carroña (no solo rebañar la celda donde se está).
+      // ∇detritusE (olor a carroña): K=20 mapea el gradiente típico a un rango útil para tanh ([-1,1]) → la conducta carroñera puede EVOLUCIONAR a rastrear.
       const dgx = (W.detritusE[xr] - W.detritusE[xl]) * 20, dgy = (W.detritusE[yb] - W.detritusE[yt]) * 20;
+      const cgx = (W.cover[xr] - W.cover[xl]) * 4, cgy = (W.cover[yb] - W.cover[yt]) * 4;   // ∇cobertura: hacia dónde hay más refugio (no comestible) → la conducta de refugiarse puede EVOLUCIONAR
       let preyJ = -1, preyD = 1e9, preyDX = 0, preyDY = 0, thD = 1e9, thDX = 0, thDY = 0;
       const myMass = this.mass[i], myMouth = this.mouthCap[i], myReach = this.maxMouthR[i] * P.preyMassMax;
       { const hc = this.hash.cell, hx = (x[i] / hc) | 0, hy = (y[i] / hc) | 0;
@@ -181,8 +180,7 @@ export class Sim {
       }
       if (preyJ >= 0) { const m = Math.sqrt(preyD) || 1; preyDX /= m; preyDY /= m; }
       if (thD < 1e9) { const m = Math.sqrt(thD) || 1; thDX /= m; thDY /= m; }
-      // PERCEPCIÓN para el render (write-only): el ojo mira al estímulo más saliente — AMENAZA antes que presa (vigilancia) —
-      // y se aviva con su cercanía; sin nada que sensar, mag=0 (el render hará que mire al rumbo, en calma). No toca la dinámica.
+      // PERCEPCIÓN del estímulo saliente (AMENAZA antes que presa) → el render orienta los ojos; sin nada que sensar, mag=0.
       if (thD < 1e9) { this.senseX[i] = thDX; this.senseY[i] = thDY; this.senseMag[i] = 1 - Math.min(1, Math.sqrt(thD) / SENSE_R); }
       else if (preyJ >= 0) { this.senseX[i] = preyDX; this.senseY[i] = preyDY; this.senseMag[i] = 1 - Math.min(1, Math.sqrt(preyD) / SENSE_R); }
       else this.senseMag[i] = 0;
@@ -194,14 +192,14 @@ export class Sim {
       const h6 = (E[i] / reproEi) * 2 - 1; inp[6] = h6 > 1 ? 1 : h6 < -1 ? -1 : h6;   // B3: hambre acotada a [-1,1]; relativa al umbral PROPIO (r/K)
       const spd0 = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]); inp[7] = this.vmax[i] > 1e-4 ? (spd0 / this.vmax[i]) * 2 - 1 : -1;
       inp[8] = dgx < -1 ? -1 : dgx > 1 ? 1 : dgx; inp[9] = dgy < -1 ? -1 : dgy > 1 ? 1 : dgy;   // #4: ∇detrito (olor a carroña)
+      inp[10] = cgx < -1 ? -1 : cgx > 1 ? 1 : cgx; inp[11] = cgy < -1 ? -1 : cgy > 1 ? 1 : cgy;   // ∇cobertura (hacia el refugio)
       for (let h = 0; h < H; h++) { let s = Wt[wb + bH + h]; for (let k = 0; k < I; k++) s += inp[k] * Wt[wb + k * H + h]; for (let p = 0; p < H; p++) s += PH[hb + p] * Wt[wb + wHh + p * H + h]; hid[h] = Math.tanh(s); }
       for (let o = 0; o < O; o++) { let s = Wt[wb + bO + o]; for (let h = 0; h < H; h++) s += hid[h] * Wt[wb + wHo + h * O + o]; out[o] = Math.tanh(s); }
       if (this.randomBehavior) { out[0] = rng.next() * 2 - 1; out[1] = rng.next() * 2 - 1; out[2] = rng.next() * 2 - 1; out[3] = rng.next() * 2 - 1; }   // control: ignora el cerebro
 
       // ---- MOVIMIENTO desde las salidas (0,1 dirección · 2 throttle); coste ∝ drag·v² ----
       const dxo = out[0], dyo = out[1], dm = Math.sqrt(dxo * dxo + dyo * dyo), throttle = (out[2] + 1) * 0.5;
-      // V2 — ADIPOSIDAD: la energía almacenada PESA → lastre ∝ reserva específica (E/masa) que recorta la vmax efectiva. fatWeight=0
-      // (default) → vmaxEff = vmax → dinámica idéntica (dorado neutro). Ver ficha tejido-adiposo-reserva-energetica.md.
+      // ADIPOSIDAD: la energía almacenada PESA → lastre ∝ E/masa que recorta la vmax efectiva; fatWeight=0 → vmaxEff=vmax (dorado neutro).
       const vmaxEff = P.fatWeight > 0 ? this.vmax[i] / (1 + P.fatWeight * E[i] / (this.mass[i] + 1e-6)) : this.vmax[i];
       if (dm > 1e-3) { const sp = vmaxEff * throttle; vx[i] = dxo / dm * sp; vy[i] = dyo / dm * sp; } else { vx[i] *= 0.5; vy[i] *= 0.5; }
       let nx = x[i] + vx[i], ny = y[i] + vy[i]; if (nx < 0) nx += size; else if (nx >= size) nx -= size; if (ny < 0) ny += size; else if (ny >= size) ny -= size; x[i] = nx; y[i] = ny;
@@ -212,45 +210,45 @@ export class Sim {
       const attack = (out[3] + 1) * 0.5;
       const Gmax = P.gutBase + P.gutPerMass * this.mass[i];   // capacidad de tripa ∝ masa
       const eating = attack > 0.5 && myMouth > 0;
-      // PASTOREO (adaptado de zenote1): la boca consume biomasa vegetal → energía a la tripa · la materia veg vuelve al nutriente.
-      // RESERVA DE REBROTE (grazeRefuge): solo es pastable lo que excede grazeRefuge·K de cada celda → no se puede pelar a cero
-      // (anti-sobrepastoreo). FORRAJEO POR ÁREA: un animal grande (mass alta) pasta de un vecindario de radio fR∝talla → accede a
-      // más terreno (payoff de talla del herbívoro). CONSERVA: veg→nutriente (materia); veg·vegEcoef → tripa(ηene) + calor(resto).
+      // PASTOREO: la boca consume biomasa vegetal por encima de grazeRefuge·K (anti-sobrepastoreo) de un área de radio fR∝talla (payoff
+      // de talla del herbívoro). CONSERVA: veg→nutriente (materia); veg·vegEcoef → tripa (ηene) + calor (resto).
       if (eating && this.gut[i] < Gmax) { const ec = W.P.vegEcoef, room = Gmax - this.gut[i];
         const kc = W.P.vegKcoef, lmd = W.lightMul * W.daylight, refF = P.grazeRefuge;
         const fR = P.forageReach > 0 ? Math.round(P.forageReach * Math.min(1, this.mass[i] / P.forageMassRef)) : 0;
         const grazable = (c) => { const a = W.veg[c] - refF * kc * W.light0[c] * lmd; return a > 0 ? a : 0; };
+        // PERF: si el área de forrajeo NO se solapa consigo misma en el toro (span ≤ cols/rows) y cabe en el buffer, cacheamos
+        // grazable() de cada celda en la pasada de `avail` y la reusamos al deplear (evita recomputarla 2×). Byte-idéntico: con
+        // área sin solape cada celda se visita una vez y W.veg no cambia entre ambas pasadas → grazable es el mismo valor. Si no, recomputa.
+        const span = 2 * fR + 1, gbuf = this._grazeBuf, cache = fR > 0 && span <= cols && span <= rows && span * span <= gbuf.length;
         let avail = 0;   // biomasa pastable disponible (por encima del refugio) en la celda o el área
         if (fR === 0) avail = grazable(cell);
+        else if (cache) { let gi = 0; for (let dy = -fR; dy <= fR; dy++) { const yy = ((cy + dy) % rows + rows) % rows; for (let dx = -fR; dx <= fR; dx++) { const g = grazable(yy * cols + ((cx + dx) % cols + cols) % cols); gbuf[gi++] = g; avail += g; } } }
         else { for (let dy = -fR; dy <= fR; dy++) { const yy = ((cy + dy) % rows + rows) % rows; for (let dx = -fR; dx <= fR; dx++) avail += grazable(yy * cols + ((cx + dx) % cols + cols) % cols); } }
         if (avail > 0) {
           let gb = P.grazeRate * myMouth; if (gb > avail) gb = avail;
           let eGain = gb * ec * P.ηene; if (eGain > room) { eGain = room; gb = room / (ec * P.ηene); }
           if (gb > 0) { const frac = gb / avail;   // mismo % de lo pastable en cada celda → deplea el área, CONSERVA (Σtomas = gb)
             if (fR === 0) { const t = grazable(cell) * frac; W.veg[cell] -= t; W.nutrient[cell] += t; }
+            else if (cache) { let gi = 0; for (let dy = -fR; dy <= fR; dy++) { const yy = ((cy + dy) % rows + rows) % rows; for (let dx = -fR; dx <= fR; dx++) { const c = yy * cols + ((cx + dx) % cols + cols) % cols; const t = gbuf[gi++] * frac; if (t > 0) { W.veg[c] -= t; W.nutrient[c] += t; } } } }
             else { for (let dy = -fR; dy <= fR; dy++) { const yy = ((cy + dy) % rows + rows) % rows; for (let dx = -fR; dx <= fR; dx++) { const c = yy * cols + ((cx + dx) % cols + cols) % cols; const t = grazable(c) * frac; if (t > 0) { W.veg[c] -= t; W.nutrient[c] += t; } } } }
             const eRaw = gb * ec; this.gut[i] += eGain; W.heat += eRaw - eGain; this.vegIn[i] += eGain; } } }
       if (preyJ >= 0 && eating && this.gut[i] < Gmax && this.alive[preyJ]) { const reach = this.maxMouthR[i] + P.eatReach;   // SACIEDAD: tripa llena no caza
-        // ESCAPE POR VELOCIDAD (fleeSpeed): la presa escapa de la captura si corre más rápido que el depredador (×fleeSpeed).
-        // fleeSpeed=0 → siempre capturable dentro de `reach` (comportamiento antiguo: la velocidad no era ni defensa ni ataque →
-        // nada premiaba el músculo → la locomoción se podaba y todo derivaba a lento). >0 → la velocidad RELATIVA decide la captura
-        // → ser rápido es DEFENSA (presa que huye) y ATAQUE (depredador que alcanza) → carrera armamentística que mantiene el músculo
-        // y el movimiento bajo selección. v2 = velocidad² del depredador (ya calculada arriba); preySp2 = la de la presa. CONSERVA
-        // (un escape = no hay kill, no se mueve materia ni energía). Frontera genotipo→física: el programador define que correr ayuda
-        // a cazar/huir; la selección decide cuánto músculo invertir. Sin estrategia cableada (el cerebro decide hacia dónde y cuánto).
+        // ESCAPE POR VELOCIDAD: la presa escapa si su velocidad² (preySp2) supera la del depredador (v2)·fleeSpeed² → la velocidad es
+        // DEFENSA y ATAQUE (mantiene el músculo bajo selección). Frontera genotipo→física: el programador define que correr ayuda a
+        // cazar/huir; la selección decide cuánto músculo invertir (sin estrategia cableada). CONSERVA (un escape no mueve materia/energía).
         const preySp2 = vx[preyJ] * vx[preyJ] + vy[preyJ] * vy[preyJ];
-        const caught = P.fleeSpeed <= 0 || v2 >= preySp2 * P.fleeSpeed * P.fleeSpeed;
+        let caught = P.fleeSpeed <= 0 || v2 >= preySp2 * P.fleeSpeed * P.fleeSpeed;
+        // COBERTURA = REFUGIO: el refugio local reduce la prob. de captura (regla FÍSICA, NO un gen "esconderse": la conducta de buscarlo
+        // emerge del cerebro vía ∇cover). coverStrength=0 → no entra (no consume RNG) → dorado intacto.
+        if (caught && P.coverStrength > 0 && rng.next() < P.coverStrength * W.cover[W.cellAt(x[preyJ], y[preyJ])]) caught = false;   // refugio (campo cover [0,1], NO comestible) → no capturado este intento
         if (preyD < reach * reach && caught) { const pc = W.cellAt(x[preyJ], y[preyJ]);
           const preyEnergy = E[preyJ] + this.gut[preyJ] + this.mass[preyJ] * this.eD;   // reservas + tripa + cuerpo de la presa
           const ge = P.ηene * preyEnergy, room = Gmax - this.gut[i], intoGut = ge < room ? ge : room;
           this.gut[i] += intoGut; this.preyIn[i] += intoGut; W.detritusE[pc] += preyEnergy - intoGut;   // lo asimilable → TRIPA; el resto → detrito (CONSERVA)
           W.detritusM[pc] += this.mass[preyJ];
           this._recordCorpse(preyJ); this.alive[preyJ] = 0; this.free[this.freeTop++] = preyJ; this.genome[preyJ] = null; this.kills++; } }
-      // CARROÑEO (#4): el MISMO gesto de "abrir boca" (attack) rebaña el detrito ENERGÉTICO (detritusE) de la celda —
-      // energía residual de muertes/depredación que, si no, se descompondría a calor. CONSERVA: detritusE → tripa (mueve
-      // energía dentro del sistema, no la crea). Frontera genotipo→física: el programador define que una boca puede comer
-      // carroña; la selección decide quién lo explota. NINGUNA estrategia cableada → el nicho carroñero/descomponedor
-      // EMERGE de cómo el organismo reparte su esfuerzo entre cazar presa viva, pastar luz y rebañar detrito.
+      // CARROÑEO: el MISMO gesto de abrir boca (attack) rebaña detritusE de la celda. CONSERVA (detritusE → tripa, no crea energía).
+      // Frontera genotipo→física: el programador define que la boca puede comer carroña; el nicho carroñero EMERGE de cómo reparte el esfuerzo.
       if (P.scavRate > 0 && myMouth > 0 && attack > 0.5 && this.gut[i] < Gmax) { const dAvail = W.detritusE[cell];
         if (dAvail > 0) { const room = Gmax - this.gut[i]; let take = P.scavRate * myMouth; if (take > dAvail) take = dAvail; if (take > room) take = room;
           if (take > 0) { W.detritusE[cell] -= take; this.gut[i] += take; this.scavenged += take; this.scavIn[i] += take; } } }
@@ -259,9 +257,7 @@ export class Sim {
 
       // METABOLISMO: reservas → calor (basal + ∝masa + nado). Muerte si se agotan → cuerpo a detrito.
       const mC = P.massCostExp === 1 ? this.mass[i] : Math.pow(this.mass[i], P.massCostExp);   // BALANCE: coste de masa super-lineal (exp>1 frena el bloat)
-      // VEJEZ / SENESCENCIA (opción B): coste metabólico que CRECE con la edad (∝ age) → los viejos gastan más → mueren por la vía
-      // de INANICIÓN de abajo (conserva gratis, reutiliza el camino a detrito) y de paso DRENA a los acumuladores inmortales.
-      // senesce=0 (default) → término 0 → dinámica idéntica (dorado intacto). Ver ficha vejez-senescencia.md.
+      // SENESCENCIA: coste metabólico ∝ edad → los viejos gastan más y mueren por la vía de inanición de abajo; senesce=0 → término 0 (dorado intacto).
       const cost = P.baseCost + P.massCost * mC + P.moveCost * v2 * this.drag[i] + P.mouthCost * this.mouthCap[i] + P.senesce * this.age[i];   // +mantenimiento de la boca (∝mouthCap) → boca bajo selección; +senescencia (∝edad)
       const spend = Math.min(E[i], cost); E[i] -= spend; W.heat += spend;
       if (E[i] <= 1e-6) { W.detritusM[cell] += this.mass[i]; W.detritusE[cell] += (E[i] > 0 ? E[i] : 0) + this.gut[i] + this.mass[i] * this.eD; this._recordCorpse(i); this.alive[i] = 0; this.free[this.freeTop++] = i; this.genome[i] = null; this.starved++; continue; }
@@ -311,7 +307,7 @@ export class Sim {
     W.vegStep(); W.decomposeStep(); W.diffuseStep(); this.tick++;   // la vegetación crece (capta luz) tras el pastoreo del tick
   }
 
-  pop() { let p = 0; for (let i = 0; i < this.cap; i++) if (this.alive[i]) p++; return p; }
-  totalMass() { let m = 0; for (let i = 0; i < this.cap; i++) if (this.alive[i]) m += this.mass[i]; return m; }
-  totalE() { let e = 0; for (let i = 0; i < this.cap; i++) if (this.alive[i]) e += this.E[i]; return e; }
+  pop() { let p = 0; for (let i = 0; i < this.hi; i++) if (this.alive[i]) p++; return p; }   // PERF: O(pop pico) (todo vivo ∈ [0,hi); resultado idéntico)
+  totalMass() { let m = 0; for (let i = 0; i < this.hi; i++) if (this.alive[i]) m += this.mass[i]; return m; }
+  totalE() { let e = 0; for (let i = 0; i < this.hi; i++) if (this.alive[i]) e += this.E[i]; return e; }
 }

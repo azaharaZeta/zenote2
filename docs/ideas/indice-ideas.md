@@ -27,6 +27,8 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 
 ## Ideas propuestas por Claude (staging — el humano las sube arriba si las acepta)
 Emergencia / realismo:
+- **Spike TURING (patrones emergentes):** la vegetación se auto-organiza en manchas/laberintos por feedback escala-dependiente (facilitación local + competencia a distancia) → patrón VIVO que EMERGE de la dinámica, no impuesto. Siguiente paso de fondo elegido para "mundo natural". Análisis en `organismos-mas-fascinantes-complejidad.md`.
+- **Deriva INDEPENDIENTE del refugio:** el campo `cover` hoy es estático; darle su propia deriva lenta (re-bake periódico + reenvío al render) → cada zona deriva por separado. Detalle en `organismos-mas-fascinantes-complejidad.md`.
 - Día/noche activable como slider (ya existe `dayNightAmp`, a 0) → ritmos de actividad, ventaja por acumular reservas.
 - Spike: ONTOGENIA real (crías que crecen escalando el FENOTIPO + madurez + vulnerabilidad juvenil). Hipótesis falsable: ¿desatasca el r/K near-neutral? Ver `archivo/crias-juveniles-crecimiento.md` (la opción A, solo-render, ya está hecha).
 

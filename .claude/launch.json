@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "alien-pocho",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server.py"],
+      "port": 3000
+    },
+    {
       "name": "zenote2",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8732"],

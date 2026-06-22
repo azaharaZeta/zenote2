@@ -19,23 +19,15 @@ const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
 const radOf = (size) => GENOME_P.radMin + (GENOME_P.radMax - GENOME_P.radMin) * size;
 const tissueOf = (t) => Math.min(TISSUE_N - 1, (t * TISSUE_N) | 0);   // gen [0,1] → categoría
 
-// M6.3 — CEREBRO: RNN recurrente (Elman) pequeña; sus PESOS son genes (heredables, mutables). Motor de la conducta, que
-// arranca SEMBRADO (seedBrain, abajo) y evoluciona/aprende desde ahí — NO emerge de cero (el seedBrain aporta la mayor parte
-// de la caza; la evolución/plasticidad añade ~18% — ver docs/ideas/auditoria-biologica-zenote2.md; el test de
-// medición m6_3-behavior no está versionado en el árbol). Entradas (10): 0,1 ∇VEGETACIÓN (olor a comida) ·
-// 2,3 dir-presa · 4,5 dir-amenaza · 6 hambre · 7 velocidad propia · 8,9 ∇detrito (rastrear carroña).
-// Salidas (4): 0,1 dirección de empuje · 2 esfuerzo (throttle) · 3 impulso de ataque. La plasticidad (sim) ajusta una
-// COPIA de trabajo en vida (no heredable: Baldwin, no lamarckismo); lo que evoluciona es el cerebro de NACIMIENTO.
-export const BRAIN = { I: 10, H: 6, O: 4, scale: 5 };
-export const BRAIN_W = BRAIN.I * BRAIN.H + BRAIN.H * BRAIN.H + BRAIN.H + BRAIN.H * BRAIN.O + BRAIN.O;  // 130
+// CEREBRO: RNN Elman; pesos = genes heredables. 12 entradas (∇veg, dir presa/amenaza, hambre, velocidad, ∇detrito, ∇cobertura)
+// → 4 salidas (dir empuje, throttle, ataque). La plasticidad (sim) ajusta una COPIA de trabajo en vida (no heredable: Baldwin); evoluciona el cerebro de NACIMIENTO.
+export const BRAIN = { I: 12, H: 6, O: 4, scale: 5 };
+export const BRAIN_W = BRAIN.I * BRAIN.H + BRAIN.H * BRAIN.H + BRAIN.H + BRAIN.H * BRAIN.O + BRAIN.O;  // 154
 // `div` (diversidad inicial, 1=normal · 0=sin ruido → todos idénticos) escala el ruido de pesos. Consume el mismo RNG → div=1 byte-idéntico.
 export function makeBrain(rng, div = 1) { const b = new Float32Array(BRAIN_W); for (let i = 0; i < BRAIN_W; i++) b[i] = (rng.next() - 0.5) * 0.4 * div; return b; }
 
-// M6.3-bootstrap — SEEDBRAIN: pesos de partida COMPETENTES (no ciegos). Decisión del usuario: el bootstrapping de
-// conducta no arrancaba desde cerebro en blanco (medido: caza ≈ aleatorio). Es el fallback previsto en 2.3, probado
-// en la app actual. NO es estrategia cableada fija: es el PUNTO DE PARTIDA — la conducta sigue evolucionando (mutación
-// del cerebro de nacimiento) y aprendiendo en vida (plasticidad). Cablea: ir hacia presa/∇luz, huir de amenaza, moverse
-// y atacar en contacto, vía 2 neuronas-relé (eje X/Y). El resto = ruido pequeño (makeBrain).
+// SEEDBRAIN: pesos de partida competentes (ir a comida/presa, huir, atacar en contacto) vía 2 neuronas-relé (eje X/Y); resto = ruido.
+// NO es estrategia fija: es el PUNTO DE PARTIDA → la conducta sigue evolucionando (mutación del cerebro) y aprendiendo en vida.
 export function seedBrain(rng, div = 1) {
   const b = makeBrain(rng, div), I = BRAIN.I, H = BRAIN.H, O = BRAIN.O, k = 1.5;   // div escala SOLO el ruido; la estructura (relés) es fija → a div=0 todos los cerebros idénticos
   const wHo = I * H + H * H + H, bO = wHo + H * O;

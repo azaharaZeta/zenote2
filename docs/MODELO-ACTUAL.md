@@ -26,7 +26,10 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
   su depredador (× `fleeSpeed`). Así **ser rápido es defensa (huir) y ataque (alcanzar)** → carrera armamentística que mantiene el
   **músculo y el movimiento bajo selección**. Sin esto, nada premiaba la velocidad → el músculo se podaba y la locomoción decaía con
   el tiempo evolutivo (todo derivaba a lento). Sigue sin estrategia cableada: el cerebro decide hacia dónde y cuánto correr.
-- **Sensores del cerebro (10):** ∇vegetación (olor a comida) · dir-presa · dir-amenaza · hambre · velocidad propia · ∇detrito.
+- **Vida finita y nichos (defaults ON):** SENESCENCIA (`senesce`: coste metabólico ∝ edad → recambio + drena acumuladores) · LASTRE
+  adiposo (`fatWeight`: la energía almacenada penaliza `vmax`) · REFUGIO no comestible (campo `cover` + sensor de cerebro → nicho
+  separable esconderse≠comer). Los campos de **luz** (productividad) y **cover** usan **RUIDO FRACTAL** (fBm) → zonas naturales irregulares; la luz deriva.
+- **Sensores del cerebro (12):** ∇vegetación · dir-presa · dir-amenaza · hambre · velocidad propia · ∇detrito · **∇cobertura** (hacia el refugio).
 
 ## Libro mayor (CONSERVA — verificado por el gate, m4/m5/m6)
 - **MATERIA (cerrada):** `nutriente + vegetación + detritoM + masa_animales = CONSTANTE`. Cicla: nutriente→veg (crecer) /
@@ -37,7 +40,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 ## Parámetros (todos en `config.js`, fuente única). Laboratorio en vivo AGRUPADO por tipo (11 sliders):
 - **Luz y vegetación:** Luz solar (`lightMul`) · Corriente del abismo (`lightFlow`) · Productividad (`vegGrowth`) · Comida en
   parches (`patchiness`) · Reserva de rebrote (`grazeRefuge`).
-- **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad (`fleeSpeed`).
+- **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad (`fleeSpeed`) · **Cobertura del refugio (`coverStrength`, ON 0.25)** = campo `cover` estático NO comestible (render: parches de espesura oscura) que esconde a la presa (`prob_escape = coverStrength·cover_local`); nicho separable, lo busca el cerebro vía sensor ∇cover.
 - **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`, **default `'sexual'`** = sexual OBLIGADA, sin respaldo asexual) · **Senescencia (`senesce`, default ON 5e-5)** = coste metabólico ∝ edad → vejez (esperanza de vida finita + recambio, drena acumuladores) · **Lastre de reservas (`fatWeight`, default ON 0.15)** = la energía almacenada pesa (vmax↓) → el excedente de presa rica subsidia carroñeros.
 - **Evolución:** Ritmo de mutación (`mutRate`).
 - NO UI (config): `vegKcoef/vegEcoef/vegDecay/vegSeed/vegDiffuse/forageMassRef`, `massCost/massCostExp`, etc.
@@ -50,7 +53,8 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - El worker `set` acepta claves de SIM_P, GENOME_P (mutRate), `world.lightMul` y cualquier clave de `world.P` (lightFlow/vegGrowth/patchiness…) → afectan en vivo.
 
 ## Render y observación
-- Fondo = **campo de VEGETACIÓN** (nebulosa TEAL con parches; más brillo = más comida; realce del pasto tenue; fluye/migra). Sustituye a la antigua nebulosa de luz.
+- Fondo = **campo de VEGETACIÓN** con **paleta hex editable** en `config` (`abyssColor`/`pastoColor`/`refugioColor`): pasto = azul
+  abisal · arrasado = negro; **contraste auto** por relieve del campo → revela regiones ricas/pobres; fluye/migra. Encima, los **parches de COBERTURA** (refugio) en verde alga.
 - Organismos: **siluetas bézier por nodo** (gota/aleta/tentáculo que afila hacia afuera según `aspect` → criaturas, no óvalos)
   con **sombreado volumétrico** (gradiente radial luz→sombra al acercar → gelatina 3D; LOD: plano a vista de mundo), **costillas
   transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde = el color del linaje OSCURECIDO, no negro; sin líneas duras).
@@ -81,7 +85,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
   Con el default actual **reproMode='sexual'** (obligada) el cazador queda MÁS FINO (carn 9-25 vs 26-57 con 'both') pero sigue
   coexistiendo — decisión de usuario de aceptar el ápice más fino (m9 floor del cazador bajado a 6). Mortalidad
   **depredación-dominante** (~2:1 frente a inanición). Diversidad de talla emerge incluso desde clones (σ≈2.0).
-- **Población estable** (no boom-bust): ~400-480 en mundo 1500, energía-limitada (≪ cap).
+- **Población estable** (no boom-bust): ~210-320 en mundo 1500 con los defaults actuales (senescencia + lastre + refugio la bajan desde el ~400-480 histórico), energía-limitada (≪ cap).
 - **Locomoción viva y estable** (gracias al escape-por-velocidad `fleeSpeed`): el "94% móvil" de antes era un **transitorio de la
   siembra** (t≈500, dirigido por el seedBrain). Sin `fleeSpeed` la velocidad **decaía a paso de tortuga** con la evolución
   (spMean 1.66→0.18, vmax→0.27 a 50k; el músculo se podaba). Con `fleeSpeed=1.0` se **ESTABILIZA en meseta** (spMean ~0.30,
@@ -89,7 +93,7 @@ El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (
 - **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
   redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
   boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x2ccff67c` — re-fijado por SENESCENCIA (`senesce`=5e-5) + LASTRE de reservas (`fatWeight`=0.15) ON por DEFAULT; cámbialo solo con cambios de física INTENCIONADOS).
+- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x65f6795f` — re-fijado por RUIDO FRACTAL (fBm multi-octava) en los campos de LUZ y COVER → zonas naturales irregulares; previo 0xb6dce579 (cover/sensor ∇cover). Cámbialo solo con cambios de física INTENCIONADOS).
 - Memoria: `zenote2-animals-only-vegetation`.
 
 ## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)
