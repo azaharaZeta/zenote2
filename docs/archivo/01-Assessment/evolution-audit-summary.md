@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Resumen final de auditoría evolutiva — Zenote
 
 > **Propósito.** Capstone de la auditoría de refactorización. Sintetiza los cinco documentos previos y responde

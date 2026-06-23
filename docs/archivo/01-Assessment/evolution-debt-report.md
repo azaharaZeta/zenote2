@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Informe de deuda evolutiva — Zenote
 
 > **Propósito.** Identificar la **deuda evolutiva** y los **parches acumulados**: casos especiales, excepciones,

@@ -1,7 +1,6 @@
-// M5.2 — FORMA = FUNCIÓN (2.2 §4). Código KEEPER: la frontera cuerpo→física. Del cuerpo desarrollado (partes, genome.js)
-// calcula las CAPACIDADES que alimentan las transacciones del mundo — SIN escalares libres de dieta/velocidad. TODOS los
-// organismos son ANIMALES (no hay PHOTO): de la inversión MOUTH/MUSCLE emerge el eje herbívoro (boca chica, pasta)↔carnívoro
-// (boca grande que maneja presa). Se computa al nacer y se cachea. Aquí solo se TRADUCE forma→capacidad; quién gana lo dicta la selección.
+// FORMA = FUNCIÓN: frontera cuerpo→física. Del cuerpo desarrollado (genome.js) calcula las CAPACIDADES que alimentan las
+// transacciones del mundo — sin escalares libres de dieta/velocidad. Se computa al nacer y se cachea. Aquí solo se TRADUCE
+// forma→capacidad (lo define el programador); el eje herbívoro↔carnívoro y quién gana lo dicta la selección, no este código.
 
 import { TISSUE } from './genome.js';
 import { PHENO_P } from '../config.js';   // parámetros forma→función: fuente única en config.js
@@ -36,8 +35,8 @@ export function computePhenotype(parts) {
   };
 }
 
-// Lectura del "oficio" MORFOLÓGICO (NO afecta a la sim; proxy boca/masa para diagnóstico). El oficio REALIZADO (dieta veg/caza/carroña),
-// que es el eje de la app, lo miden el worker (roleFromDiet) y el inspector; esta lectura morfológica solo la usan los spikes.
+// Lectura del oficio MORFOLÓGICO (proxy boca/masa para diagnóstico; NO afecta a la sim). El oficio REALIZADO (dieta) lo miden
+// el worker (roleFromDiet) y el inspector; esta lectura solo la usan los spikes.
 const ROLE_NAMES = ['herbivoro', 'carnivoro', 'omnivoro'];
 export function trophicCode(mouthCap, maxMouthR, mass) {   // 0 herbívoro · 1 carnívoro · 2 omnívoro
   if (mouthCap <= 1e-6) return 0;                          // sin boca útil → pastador por defecto
@@ -46,8 +45,8 @@ export function trophicCode(mouthCap, maxMouthR, mass) {   // 0 herbívoro · 1 
 }
 export function trophicRole(ph) { return ROLE_NAMES[trophicCode(ph.mouthCap, ph.maxMouthR, ph.mass)]; }
 
-// Distancia FENOTÍPICA normalizada (masa / capacidad de boca / tamaño de presa manejable). Escala del aislamiento reproductivo
-// (mateCompat) y de la especiación. ÚNICA definición: la comparten sim._findMate y test/m7-speciation.
+// Distancia FENOTÍPICA normalizada (masa / capacidad de boca / tamaño de presa manejable). Escala el aislamiento reproductivo
+// (mateCompat) y la especiación. ÚNICA definición: la comparten sim._findMate y test/m7-speciation.
 export function phenoDistance(m1, mo1, r1, m2, mo2, r2) {
   const dm = (m1 - m2) / 2, dmo = (mo1 - mo2) / 10, dr = (r1 - r2) / 4;
   return Math.sqrt(dm * dm + dmo * dmo + dr * dr);

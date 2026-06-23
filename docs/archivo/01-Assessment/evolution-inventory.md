@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Inventario de complejidad biológica — Zenote
 
 > **Propósito.** Catálogo EXHAUSTIVO de todo lo que participa en la evolución y la ecología del simulador:

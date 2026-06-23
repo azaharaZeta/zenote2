@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Arquitectura evolutiva ideal desde primeros principios — Zenote
 
 > **Fase 2 — Rediseño.** Diseño desde primeros principios del sustrato evolutivo. Asume que el sistema biológico

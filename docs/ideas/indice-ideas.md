@@ -8,7 +8,7 @@ Este fichero es **solo el backlog de ideas SIN PROCESAR**. Reglas estrictas para
 2. **Solo un HUMANO añade ideas en la sección "Ideas de usuario".** Claude puede sugerir en la sección de
    "Ideas propuestas por Claude" (zona de staging para que el humano las suba; no es el backlog real).
 3. **Cuando una idea EMPIEZA a procesarse** (se analiza / se le da ficha): se **QUITA de este índice** y se crea su
-   fichero propio `<idea>.md` en **esta misma carpeta** (`docs/Zenote 2.0/ideas/`). El análisis, el estado y el
+   fichero propio `<idea>.md` en **esta misma carpeta** (`docs/ideas/`). El análisis, el estado y el
    histórico van en ESE fichero, nunca aquí.
 4. **Cuando una idea se TERMINA (implementada) o se DESCARTA**: se actualiza su fichero con el estado final y se
    **MUEVE a `archivo/`** (subcarpeta de esta misma ruta).

@@ -1,103 +1,68 @@
-# Zenote 2 — MODELO ACTUAL (fuente de verdad del estado vivo)
+# Zenote 2 — MODELO ACTUAL 
 
-Este doc describe lo que zenote2 **ES hoy** (el código en `zenote2/`). Los docs de `01-Assessment/` y `02-Redesign/` son el
-razonamiento histórico del rediseño; donde contradigan a este, **manda este**. Parámetros exactos: `zenote2/src/config.js`.
+Describe lo que zenote2 **ES hoy**. En docs de la carpeta `archivo` están el histórico de assessments y rediseños.
+Parámetros exactos y sus valores: `src/config.js` (fuente única).
+La fuente de verdad, en cualquier caso, siempre es el código fuente de la aplicación. 
 
-## El cambio de cimientos (2026-06-20)
-El diseño original hacía EMERGER el eje autótrofo↔heterótrofo del genoma (tejido PHOTO captaba luz). En la práctica degeneró
-(todo se volvía sésil fotosintetizando; ver histórico del inmovilismo). **Se rediseñó:** ya no hay autótrofos.
+## Qué es
+- **Todos los organismos son ANIMALES** (heterótrofos; no fotosintetizan). Tejidos del genoma: `STRUCTURE · MUSCLE · MOUTH`.
+  Cerebro neuronal (pesos = genes), morfología por reglas de desarrollo (genoma → `develop` → cuerpo), reproducción
+  sexual/asexual con mutación y recombinación homóloga. Genes de historia de vida r/K: `reproK` (umbral de cría) e
+  `investFrac` (inversión por cría); el eje r↔K es near-neutral en la pecera cerrada.
+- **La VEGETACIÓN es el productor parametrizado (no genético).** Campo `world.veg` por celda: crece captando LUZ (entrada
+  de energía) y consumiendo NUTRIENTE (materia), con capacidad ∝ luz local; senesce a detrito. Rebrote en parches
+  (`patchiness`). Productividad ∝ luz local → las zonas frondosas siguen al campo de luz (que deriva con `lightFlow`).
+  Pastoreo con reserva de rebrote (`grazeRefuge`, anti-sobrepastoreo) y forrajeo por área ∝ talla (`forageReach`).
+- **Los animales comen** (única vía de energía): **pastan** vegetación · **cazan** presa viva · **carroñean** detrito, todo
+  con el mismo gesto neuronal de abrir boca. El eje **herbívoro↔carnívoro emerge de la DIETA realizada**, no de reglas fijas.
+- **La caza depende de la velocidad relativa** (`fleeSpeed`): la presa escapa si corre más que el depredador → la velocidad
+  es defensa y ataque, y mantiene el músculo bajo selección.
+- **Vida finita y nichos (ON por defecto):** senescencia (`senesce`, coste ∝ edad) · lastre adiposo (`fatWeight`, la energía
+  almacenada penaliza `vmax`) · refugio no comestible (campo `cover` + sensor de cerebro → nicho separable esconderse≠comer).
+  Los campos de luz y cover usan ruido fractal (fBm) → zonas irregulares; la luz deriva, el cover es estático.
+- **Sensores del cerebro (12):** ∇vegetación · dir-presa · dir-amenaza · hambre · velocidad propia · ∇detrito · ∇cobertura.
 
-## Qué es zenote2 ahora
-- **TODOS los organismos son ANIMALES** (heterótrofos). No fotosintetizan. Tejidos del genoma: `STRUCTURE · MUSCLE · MOUTH`
-  (sin PHOTO). Cerebro neuronal (pesos = genes), morfología de reglas (genoma→develop→cuerpo), reproducción sexual/asexual.
-  El genoma incluye además genes de **historia de vida r/K** (`reproK` = umbral de cría · `investFrac` = inversión por cría),
-  evolucionados sobre el baseline `SIM_P.reproE` (slider). MEDIDO: el eje r↔K queda **near-neutral** (no diverge) en la pecera
-  cerrada y saturada — resultado honesto, ver `ideas/auditoria-zenote2-2026-06-20.md` §5.
-- **La VEGETACIÓN es el productor, parametrizado (NO genético).** Campo `world.veg` por celda: crece captando LUZ (energía entra
-  al ecosistema aquí) y consumiendo NUTRIENTE (materia), con capacidad ∝ luz local; senesce a detrito. Rebrote con `patchiness`
-  (logístico + difusión de semilla al vecindario, adaptado de zenote1) → forma y MIGRA **parches** orgánicos con el pastoreo↔
-  rebrote. **Productividad ∝ luz local** → las zonas frondosas SIGUEN al campo de luz (que deriva con "Corriente del abismo")
-  → la vegetación FLUYE. Pastoreo con **reserva de rebrote** (`grazeRefuge`, anti-sobrepastoreo) y **forrajeo por ÁREA∝talla**
-  (`forageReach`, payoff de talla del herbívoro). No evoluciona — es física del mundo. (Genética en la veg = `ideas/vegetacion-con-genetica.md`, Escenario 2.)
-- **Los animales comen** (única vía de energía): **pastan** vegetación · **cazan** presa viva · **carroñean** detrito — todo con
-  el mismo gesto neuronal de "abrir boca". El eje **herbívoro↔carnívoro EMERGE de la DIETA realizada** (a qué dedica la boca),
-  no de la morfología ni de un if/else. La conducta (forrajear/cazar/huir) emerge del cerebro+selección (regla #1 intacta).
-- **La caza depende de la VELOCIDAD relativa (`fleeSpeed`, 2026-06-20):** una presa escapa de la captura si corre más rápido que
-  su depredador (× `fleeSpeed`). Así **ser rápido es defensa (huir) y ataque (alcanzar)** → carrera armamentística que mantiene el
-  **músculo y el movimiento bajo selección**. Sin esto, nada premiaba la velocidad → el músculo se podaba y la locomoción decaía con
-  el tiempo evolutivo (todo derivaba a lento). Sigue sin estrategia cableada: el cerebro decide hacia dónde y cuánto correr.
-- **Vida finita y nichos (defaults ON):** SENESCENCIA (`senesce`: coste metabólico ∝ edad → recambio + drena acumuladores) · LASTRE
-  adiposo (`fatWeight`: la energía almacenada penaliza `vmax`) · REFUGIO no comestible (campo `cover` + sensor de cerebro → nicho
-  separable esconderse≠comer). Los campos de **luz** (productividad) y **cover** usan **RUIDO FRACTAL** (fBm) → zonas naturales irregulares; la luz deriva.
-- **Sensores del cerebro (12):** ∇vegetación · dir-presa · dir-amenaza · hambre · velocidad propia · ∇detrito · **∇cobertura** (hacia el refugio).
+## Libro mayor (conserva; verificado por el gate)
+- **MATERIA (cerrada):** `nutriente + vegetación + detritoM + masa_animales = constante`. Cicla: nutriente→veg→(pastoreo)→
+  nutriente / veg→detrito (senescencia) / animal→detrito (muerte) / detrito→nutriente (descomposición).
+- **ENERGÍA (abierta):** entra como LUZ (capturada por la vegetación), se almacena (`veg·vegEcoef + reservas + tripa +
+  detritoE`), sale como CALOR (metabolismo, digestión, descomposición). Sin luz → la vegetación se apaga → todo muere.
 
-## Libro mayor (CONSERVA — verificado por el gate, m4/m5/m6)
-- **MATERIA (cerrada):** `nutriente + vegetación + detritoM + masa_animales = CONSTANTE`. Cicla: nutriente→veg (crecer) /
-  veg→nutriente (pastoreo) / veg→detrito (senescencia) / animal→detrito (muerte) / detrito→nutriente (descomposición).
-- **ENERGÍA (abierta):** entra como LUZ (capturada por la vegetación), se almacena (`veg·vegEcoef + reservas + tripa + detritoE`),
-  sale como CALOR (metabolismo, digestión ineficiente, senescencia/descomposición). Sin luz → la vegetación se apaga → todo muere.
-
-## Parámetros (todos en `config.js`, fuente única). Laboratorio en vivo AGRUPADO por tipo (11 sliders):
+## Parámetros (en `config.js`). Laboratorio en vivo, agrupado:
 - **Luz y vegetación:** Luz solar (`lightMul`) · Corriente del abismo (`lightFlow`) · Productividad (`vegGrowth`) · Comida en
   parches (`patchiness`) · Reserva de rebrote (`grazeRefuge`).
-- **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad (`fleeSpeed`) · **Cobertura del refugio (`coverStrength`, ON 0.25)** = campo `cover` estático NO comestible (render: parches de espesura oscura) que esconde a la presa (`prob_escape = coverStrength·cover_local`); nicho separable, lo busca el cerebro vía sensor ∇cover.
-- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`) · Reproducción (`reproMode`, **default `'sexual'`** = sexual OBLIGADA, sin respaldo asexual) · **Senescencia (`senesce`, default ON 5e-5)** = coste metabólico ∝ edad → vejez (esperanza de vida finita + recambio, drena acumuladores) · **Lastre de reservas (`fatWeight`, default ON 0.15)** = la energía almacenada pesa (vmax↓) → el excedente de presa rica subsidia carroñeros.
+- **Alimentación:** Pastoreo (`grazeRate`) · Alcance de forrajeo (`forageReach`) · Carroñeo (`scavRate`) · Escape por velocidad
+  (`fleeSpeed`) · Cobertura del refugio (`coverStrength`; `prob_escape = coverStrength·cover_local`).
+- **Metabolismo y cría:** Metabolismo basal (`baseCost`) · Umbral de cría (`reproE`; el umbral real de cada organismo =
+  `reproE·reproK`) · Reproducción (`reproMode`: `both`/`asexual`/`sexual`, default `sexual`) · Senescencia (`senesce`) ·
+  Lastre de reservas (`fatWeight`).
 - **Evolución:** Ritmo de mutación (`mutRate`).
-- NO UI (config): `vegKcoef/vegEcoef/vegDecay/vegSeed/vegDiffuse/forageMassRef`, `massCost/massCostExp`, etc.
-- Arranque (reinicio): Tamaño de mundo, Sembrado inicial, Extensión, Diversidad, + `vegInit` (NO UI).
-  **Diversidad inicial** (`START.diversity`, slider): 0 = fundadores CLONES byte-idénticos · 1 = fundadores DIVERSOS — `makeFounder`
-  perturba morfología (talla/proporciones/aletas/oscilación) + r/K ∝ div, con TEJIDOS FIJOS (raíz=boca, módulo=músculo) como suelo
-  de viabilidad (todo fundador come y se mueve). El TONO de linaje es ALEATORIO por mundo (a div=0 todos el MISMO color random,
-  reproducible por semilla — sale de un RNG aparte, no toca el dorado; a div>0 se dispersa). La complejidad ESTRUCTURAL (más
-  módulos, recursión) sigue emergiendo por mutación.
-- El worker `set` acepta claves de SIM_P, GENOME_P (mutRate), `world.lightMul` y cualquier clave de `world.P` (lightFlow/vegGrowth/patchiness…) → afectan en vivo.
+- **Arranque (reinicio):** Tamaño de mundo · Sembrado inicial · Extensión · Diversidad (`START.diversity`: 0 = fundadores
+  clones · 1 = diversos; perturba morfología + r/K con tejidos fijos = suelo de viabilidad).
+- El worker (`set`) acepta claves de `SIM_P`, `GENOME_P` (mutRate), `world.lightMul` y `world.P` → efecto en vivo.
 
-## Render y observación
-- Fondo = **campo de VEGETACIÓN** con **paleta hex editable** en `config` (`abyssColor`/`pastoColor`/`refugioColor`): pasto = azul
-  abisal · arrasado = negro; **contraste auto** por relieve del campo → revela regiones ricas/pobres; fluye/migra. Encima, los **parches de COBERTURA** (refugio) en verde alga.
-- Organismos: **siluetas bézier por nodo** (gota/aleta/tentáculo que afila hacia afuera según `aspect` → criaturas, no óvalos)
-  con **sombreado volumétrico** (gradiente radial luz→sombra al acercar → gelatina 3D; LOD: plano a vista de mundo), **costillas
-  transversales** (segmentación, color = sombra del cuerpo → anatomía) y **contorno suave unificado** (reborde = el color del linaje OSCURECIDO, no negro; sin líneas duras).
-  Color por modo (**Natural**=linaje + slider «Resaltar tipo tejido» 0→1 (0 solo natural · 1 solo tejido) — el GLOW conserva SIEMPRE
-  el natural, nunca el del tejido · **Oficio**=herbívoro/carnívoro/omnívoro por dieta · Linaje). Ojos = fracción carnívora
-  de la dieta. **Crías**: nacen pequeñas y CRECEN al tamaño adulto con la edad (solo render: el tamaño dibujado ∝ edad, `growMin→1`
-  en `growMature` ticks; write-only → dorado intacto; mecánicamente la cría ya es adulta). Cadáveres con forma que se desvanecen. Inspector: **retrato del organismo** (silueta dibujada en la tarjeta; se
-  CONGELA su cadáver al morir hasta cerrar/cambiar) + dieta "pasto/caza/carroña" + linaje + r/K. La cámara SIGUE al seleccionado
-  (sin botón; panear lo cancela). El cuerpo viaja en `detail.bodyParts` (write-only → no toca el dorado).
-- **Abismo vivo:** nebulosa de vegetación TEAL con **profundidad** (campo frío↔cálido fundido en el bake) + **plancton/micro-flora**
-  (chispas que florecen donde hay veg) + **nieve marina** (detrito a la deriva que titila) bajo los organismos → profundidad y vida.
-  **GLOW** (bioluminiscencia): es el desenfoque ADITIVO de los CUERPOS (NO hay aura plana — se quitó porque tapaba el glow), con
-  radio ∝ zoom y AMPLIACIÓN por pasos (×2, ping-pong de búferes) → suave a cualquier zoom y SIN "rejilla"; solo `drawImage`
-  (cross-browser; NO `ctx.filter blur`, que Safari < 16.4 ignora → sin glow). Gatea plancton+nieve en móvil/Baja. + viñeta.
-- **Calidad gráfica (UI: alta · media · baja)** — preset (`config.QUALITY`) de LOD (umbrales en px de silueta/volumen/costillas/ojos)
-  + resolución (`dprCap`) + atmósfera (plancton/nieve) + glow. `baja` = móvil/equipos lentos: sin glow ni volumen, siluetas solo de
-  cerca → plano y barato. Cambia en vivo (setQuality); render PURO → no toca la sim ni el dorado.
-- Gráficas en vivo: población / nacimientos (sex·asex) / muertes (predación·inanición) / **talla (masa) media por oficio en el
-  tiempo** (ver la talla evolucionar + divergir entre nichos) + **HISTOGRAMA de un rasgo seleccionable**
-  (masa · boca · v.máx · nº partes · umbral de cría r/K · inversión por cría · linaje), apilado por oficio (herbívoro/resto) sobre eje
-  fijo → ver la distribución DERIVAR (prueba visual de la selección) y la diferenciación de nicho (p.ej. boca: herbívoros bajos,
-  carnívoros altos). Se computa en el worker (solo viajan los bins). Mensaje `histTrait`.
+## Render y observación (render puro: no toca la sim ni el dorado)
+- **Fondo = campo de vegetación** con paleta hex editable (`abyssColor`/`pastoColor`/`refugioColor`) + contraste-auto por
+  relieve; fluye con la luz. Encima, parches de cobertura (refugio) en verde alga.
+- **Organismos:** siluetas bézier por nodo (afilan según `aspect`) con sombreado volumétrico, costillas y contorno suave
+  (reborde = linaje oscurecido). Color por modo: Natural (linaje + tinte de tejido) · Oficio (por dieta) · Linaje. Ojos =
+  lectura de percepción (miran al estímulo). Crías: tamaño dibujado ∝ edad. Cadáveres que se desvanecen. Inspector con
+  retrato del organismo + dieta + r/K; la cámara sigue al seleccionado.
+- **Abismo vivo:** nebulosa de vegetación con profundidad + plancton + nieve marina; GLOW por downsample aditivo (no
+  `ctx.filter blur`). **Calidad gráfica (alta/media/baja):** preset de LOD + resolución (`dprCap`) + atmósfera + glow, en vivo.
+- **Gráficas en vivo (se computan en el worker):** población · nacimientos · muertes · talla media por oficio · histograma
+  de un rasgo seleccionable, apilado por oficio.
 
 ## Resultados medidos (headless, 3-5 semillas, 30-50k ticks)
-- **Conserva** materia (deriva ~0.004% = ruido f32) + energía (luz→calor): gate **9/9 verde** (`npm run test:zenote2`; incluye m9 = regresión ecológica + CI en `.github/`).
-- **Estructura trófica robusta y persistente:** herbívoros + carnívoros + carroñeros coexisten a 30-50k en TODAS las semillas
-  (≈65%/15%/20% por dieta, medido con 'both'); el **cazador NO se extingue** (el baseline de v1 lo perdía en 5/5 a mundo pequeño).
-  Con el default actual **reproMode='sexual'** (obligada) el cazador queda MÁS FINO (carn 9-25 vs 26-57 con 'both') pero sigue
-  coexistiendo — decisión de usuario de aceptar el ápice más fino (m9 floor del cazador bajado a 6). Mortalidad
-  **depredación-dominante** (~2:1 frente a inanición). Diversidad de talla emerge incluso desde clones (σ≈2.0).
-- **Población estable** (no boom-bust): ~210-320 en mundo 1500 con los defaults actuales (senescencia + lastre + refugio la bajan desde el ~400-480 histórico), energía-limitada (≪ cap).
-- **Locomoción viva y estable** (gracias al escape-por-velocidad `fleeSpeed`): el "94% móvil" de antes era un **transitorio de la
-  siembra** (t≈500, dirigido por el seedBrain). Sin `fleeSpeed` la velocidad **decaía a paso de tortuga** con la evolución
-  (spMean 1.66→0.18, vmax→0.27 a 50k; el músculo se podaba). Con `fleeSpeed=1.0` se **ESTABILIZA en meseta** (spMean ~0.30,
-  vmax ~0.41, +52-64% vs sin él) → el movimiento ya no se apaga con el tiempo. El equilibrio real es **~60% móvil a paso vivo**, no 94%.
-- **Boca bajo selección** (coste de boca `mouthCost`): antes la `mouthCap` inflaba ~50× (economía limitada por digestión → boca
-  redundante que derivaba). Con coste, deja de inflar (mouthCap 55→~9) y **emerge diferenciación de nicho**: el carnívoro mantiene
-  boca ~2× la del herbívoro (la boca del depredador paga su coste manejando presa; el pastador la recorta). Sin romper coexistencia.
-- El **dorado vivo** está en `zenote2/test/m8-determinism.mjs` (hoy `0x65f6795f` — re-fijado por RUIDO FRACTAL (fBm multi-octava) en los campos de LUZ y COVER → zonas naturales irregulares; previo 0xb6dce579 (cover/sensor ∇cover). Cámbialo solo con cambios de física INTENCIONADOS).
-- Memoria: `zenote2-animals-only-vegetation`.
+- **Conserva** materia (deriva ~0.004% = ruido f32) + energía: gate 9/9 verde.
+- **Estructura trófica robusta:** herbívoros/carnívoros/carroñeros coexisten (~65/15/20% por dieta); el cazador no se
+  extingue. Con `reproMode='sexual'` el cazador queda más fino pero coexiste. Mortalidad depredación-dominante (~2:1).
+- **Población estable** (~210-320 en mundo 1500), energía-limitada. **Locomoción viva** gracias al escape-por-velocidad.
+- **Boca bajo selección** (`mouthCost`) → diferenciación de nicho (boca del carnívoro ~2× la del herbívoro).
+- **Determinismo:** dorado `0x65f6795f` en `test/m8-determinism.mjs`. Cámbialo solo con cambios de física intencionados.
+- **Rendimiento:** motor grid-bound; optimizado a ~1.7-1.85× (luz por sin/cos precomputado, difusión/vegStep sin módulo,
+  escaneos O(pob)). Mide con `spikes/perf-bench.mjs`.
 
-## Historia (memorias SUPERADAS por el cambio de cimientos — no aplicarlas como vigentes)
-El modelo PREVIO tenía fotosíntesis en el genoma. Quedaron obsoletas: `zenote2-immobility-photohalf-fix` (photoHalf),
-`photomotion-sessility-lever` (photoMotionK, ya no existe), `zenote2-scavenger-needs-edensity` (eD=0 ahora), parte de
-`zenote2-abyss-flowing-light` (la corriente ahora mueve la veg vía productividad∝luz). `zenote2-bloat-masscostexp` SIGUE
-vigente (massCostExp aplica a los cuerpos animales).
+## Historia
+El modelo PREVIO tenía fotosíntesis en el genoma (degeneraba a sesilidad). Las notas/memorias que mencionan `photoCap`,
+"autótrofo↔heterótrofo" o "fotosíntesis" describen ese modelo obsoleto; hoy todos son animales y la energía entra por la vegetación.

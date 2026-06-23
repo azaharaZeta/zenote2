@@ -1,12 +1,10 @@
-// M5.1 — GENOMA DE REGLAS + DESARROLLO (2.2). Código KEEPER: el mapa genotipo→fenotipo del modelo nuevo.
-// El genoma NO son rasgos, son REGLAS DE DESARROLLO (un programa que se ejecuta para crecer el cuerpo). `develop()`
-// recorre un grafo generativo de MÓDULOS (con recursión/simetría/modulación por contexto) y produce un CUERPO =
-// lista de PARTES con geometría. Validez POR CONSTRUCCIÓN (recursión acotada → siempre un cuerpo legal). La forma
-// que produce alimenta la física (M5.2 forma=función) y el render (M5.5). Validado conceptualmente en el spike M3.
+// GENOMA DE REGLAS + DESARROLLO: mapa genotipo→fenotipo. El genoma son REGLAS DE DESARROLLO (no rasgos): `develop()`
+// recorre un grafo de MÓDULOS (recursión/simetría/modulación por contexto) y produce un CUERPO = lista de PARTES con
+// geometría. Validez POR CONSTRUCCIÓN (recursión acotada → siempre cuerpo legal). Alimenta la física y el render.
 
-// Tejido de una parte. TODOS los organismos son ANIMALES (no hay PHOTO: la fotosíntesis la hace la VEGETACIÓN parametrizada
-// del mundo, no el genoma). MUSCLE propulsa · MOUTH ingiere (pasta veg / caza / carroñea) · STRUCTURE solo da cuerpo. De la
-// inversión MOUTH/MUSCLE + la dieta realizada EMERGE el eje herbívoro↔carnívoro. La frontera (qué hace cada tejido) es física.
+// Tejido de una parte. TODOS los organismos son ANIMALES (sin PHOTO). MUSCLE propulsa · MOUTH ingiere (pasta/caza/carroña)
+// · STRUCTURE solo da cuerpo. FRONTERA genotipo→física: el programador define qué hace cada tejido; el eje herbívoro↔carnívoro
+// EMERGE de la inversión MOUTH/MUSCLE + la dieta realizada (no se codifica).
 export const TISSUE = { STRUCTURE: 0, MUSCLE: 1, MOUTH: 2 };
 export const TISSUE_N = 3;
 
@@ -20,16 +18,16 @@ const radOf = (size) => GENOME_P.radMin + (GENOME_P.radMax - GENOME_P.radMin) * 
 const tissueOf = (t) => Math.min(TISSUE_N - 1, (t * TISSUE_N) | 0);   // gen [0,1] → categoría
 
 // CEREBRO: RNN Elman; pesos = genes heredables. 12 entradas (∇veg, dir presa/amenaza, hambre, velocidad, ∇detrito, ∇cobertura)
-// → 4 salidas (dir empuje, throttle, ataque). La plasticidad (sim) ajusta una COPIA de trabajo en vida (no heredable: Baldwin); evoluciona el cerebro de NACIMIENTO.
+// → 4 salidas (dir empuje, throttle, ataque). La plasticidad ajusta una COPIA de trabajo en vida (no heredable); evoluciona el cerebro de NACIMIENTO.
 export const BRAIN = { I: 12, H: 6, O: 4, scale: 5 };
 export const BRAIN_W = BRAIN.I * BRAIN.H + BRAIN.H * BRAIN.H + BRAIN.H + BRAIN.H * BRAIN.O + BRAIN.O;  // 154
 // `div` (diversidad inicial, 1=normal · 0=sin ruido → todos idénticos) escala el ruido de pesos. Consume el mismo RNG → div=1 byte-idéntico.
 export function makeBrain(rng, div = 1) { const b = new Float32Array(BRAIN_W); for (let i = 0; i < BRAIN_W; i++) b[i] = (rng.next() - 0.5) * 0.4 * div; return b; }
 
 // SEEDBRAIN: pesos de partida competentes (ir a comida/presa, huir, atacar en contacto) vía 2 neuronas-relé (eje X/Y); resto = ruido.
-// NO es estrategia fija: es el PUNTO DE PARTIDA → la conducta sigue evolucionando (mutación del cerebro) y aprendiendo en vida.
+// Bootstrap, NO estrategia fija: la conducta sigue evolucionando desde aquí.
 export function seedBrain(rng, div = 1) {
-  const b = makeBrain(rng, div), I = BRAIN.I, H = BRAIN.H, O = BRAIN.O, k = 1.5;   // div escala SOLO el ruido; la estructura (relés) es fija → a div=0 todos los cerebros idénticos
+  const b = makeBrain(rng, div), I = BRAIN.I, H = BRAIN.H, O = BRAIN.O, k = 1.5;   // div escala SOLO el ruido; estructura (relés) fija → a div=0 cerebros idénticos
   const wHo = I * H + H * H + H, bO = wHo + H * O;
   // h0 = relé del eje X: + hacia presa (in2) · − amenaza (in4) · + ∇veg/comida (in0) · + ∇detrito (in8)   [índice wIh = in·H + h]
   b[2 * H + 0] = k; b[4 * H + 0] = -k; b[0 * H + 0] = k * 0.6; b[8 * H + 0] = k * 0.6;
@@ -42,15 +40,13 @@ export function seedBrain(rng, div = 1) {
   return b;
 }
 
-// Marcas de HOMOLOGÍA (alinean módulos en la recombinación, como genes Hox). La marca 1 está RESERVADA para el módulo del
-// FUNDADOR (par de aletas) → TODOS los fundadores la comparten → sus descendientes (de linajes distintos) recombinan ese módulo
-// de forma HOMÓLOGA (no como "presente en uno solo", que degeneraba a herencia/pérdida aleatoria — #4). Los módulos NUEVOS por
-// mutación estrenan marca (HOM++, desde 2). (Paralogía en la duplicación: pendiente — exigiría que recombine agrupe por marca.)
+// Marcas de HOMOLOGÍA (alinean módulos en la recombinación, como genes Hox). Marca 1 RESERVADA al módulo del FUNDADOR (par de
+// aletas) → todos los fundadores la comparten → sus descendientes recombinan ese módulo de forma HOMÓLOGA. Módulos nuevos por
+// mutación estrenan marca (HOM++, desde 2).
 let HOM = 2;   // contador de marcas de homología; 1 = reservada al módulo fundador (compartida)
 const FOUNDER_HOM = 1;
-// Reinicia el contador. Lo llama el constructor de Sim para que cada mundo arranque limpio (HOM=2) en vez de arrastrar un
-// global entre instancias/procesos (los tests crean varios Sim seguidos). Determinista: la recombinación compara `hom` por
-// IGUALDAD y el ancla del fundador es constante → el offset no afecta al resultado, y el primer mundo del proceso ya arrancaba en 2.
+// Reinicia el contador (HOM=2). Lo llama el constructor de Sim para que cada mundo arranque limpio. Determinista: recombine
+// compara `hom` por IGUALDAD y el ancla del fundador es constante → el offset no afecta al resultado.
 export function resetHom() { HOM = 2; }
 
 function mkModule(rng) {
@@ -64,26 +60,23 @@ function mkModule(rng) {
   };
 }
 
-// Fundador SIMPLE = ANIMAL grazer (la complejidad EMERGE): cabeza con BOCA (pasta vegetación) + un par bilateral de MÚSCULO
-// (aletas que propulsan → puede moverse a buscar comida). tissueOf con TISSUE_N=3 (t·3|0): <0.333 STRUCTURE · 0.333-0.667
-// MUSCLE · ≥0.667 MOUTH. Desde aquí emergen herbívoros (boca chica, pastan) y carnívoros (boca grande, cazan).
+// Fundador SIMPLE = ANIMAL grazer (la complejidad EMERGE): cabeza con BOCA + par bilateral de MÚSCULO (aletas). tissueOf con
+// TISSUE_N=3 (t·3|0): <0.333 STRUCTURE · 0.333-0.667 MUSCLE · ≥0.667 MOUTH.
 export function makeFounder(rng, div = 1, baseHue = 0.5) {
-  // div = DIVERSIDAD inicial: 0 = todos los fundadores IDÉNTICOS (clones) · 1 = variación amplia (talla/proporciones/aletas/r-K).
-  // Dos perturbadores, AMBOS ∝ div y que consumen el MISMO RNG sea cual sea div (a div=0 la perturbación es 0 → genes idénticos
-  // pero el stream avanza igual → determinista): `dv(x)` mezcla un [0,1] hacia 0.5 (fase/tono); `jig` añade ruido gaussiano acotado
-  // a un gen morfológico continuo. SUELO DE VIABILIDAD: los TEJIDOS quedan FIJOS (raíz=BOCA, módulo=MÚSCULO) y el músculo conserva
-  // algo de oscilación → todo fundador puede COMER y MOVERSE aunque su forma/r-K varíen. La complejidad ESTRUCTURAL (más módulos,
-  // recursión, ramas) EMERGE por mutación, no se siembra. (Antes: solo variaban fase/tono/cerebro; la morfología era fija.)
+  // div = DIVERSIDAD inicial: 0 = fundadores IDÉNTICOS (clones) · 1 = variación amplia (talla/proporciones/aletas/r-K).
+  // `dv(x)` y `jig` perturban ∝ div consumiendo el MISMO RNG sea cual sea div (a div=0 perturbación 0 pero stream avanza igual →
+  // determinista). SUELO DE VIABILIDAD: TEJIDOS FIJOS (raíz=BOCA, módulo=MÚSCULO) + músculo con oscilación → todo fundador puede
+  // COMER y MOVERSE. La complejidad ESTRUCTURAL (más módulos, recursión, ramas) EMERGE por mutación, no se siembra.
   const dv = (x) => 0.5 + (x - 0.5) * div;
   const jig = (base, amp, lo, hi) => { const v = base + rng.gaussian() * amp * div; return v < lo ? lo : v > hi ? hi : v; };
   const P = GENOME_P;
   return {
     root: { size: jig(0.42, 0.18, 0.12, 0.95), aspect: jig(0.4, 0.22, 0, 1), tissue: 0.8 /*MOUTH (fijo: viabilidad — comer)*/, oscAmp: jig(0.1, 0.12, 0, 0.6), phase: dv(rng.next()) },
     modules: [{ angle: jig(2.8, 0.5, 0.3, Math.PI), size: jig(0.35, 0.16, 0.12, 0.8), aspect: jig(0.6, 0.22, 0, 1), tissue: 0.5 /*MUSCLE (fijo: viabilidad — moverse)*/, oscAmp: jig(0.4, 0.18, 0.05, 0.9), phase: dv(rng.next()),
-                recursive: false, recLimit: 1, symmetric: true, taper: jig(0.85, 0.12, 0.5, 1), hom: FOUNDER_HOM }],   // par de aletas: marca COMPARTIDA → recombinación homóloga entre linajes
-    brain: seedBrain(rng, div),   // bootstrap de conducta competente; div escala el ruido (div=0 → cerebro idéntico)
-    hue: (baseHue + (rng.next() - 0.5) * div + 1) % 1,   // LINAJE (render-only, heredable): a div=0 todos = baseHue (mismo color ALEATORIO por mundo) · a div=1 disperso por todo el círculo
-    // r/K: historia de vida. Antes FIJOS; ahora varían ∝ div dentro de su rango (GENOME_P) → diversidad de estrategia desde t=0.
+                recursive: false, recLimit: 1, symmetric: true, taper: jig(0.85, 0.12, 0.5, 1), hom: FOUNDER_HOM }],   // par de aletas: marca COMPARTIDA → recombinación homóloga
+    brain: seedBrain(rng, div),   // bootstrap; div escala el ruido (div=0 → cerebro idéntico)
+    hue: (baseHue + (rng.next() - 0.5) * div + 1) % 1,   // LINAJE (render-only, heredable): a div=0 todos = baseHue · a div=1 disperso por el círculo
+    // r/K: historia de vida; varían ∝ div dentro de su rango (GENOME_P).
     reproK: jig(1.0, 0.3, P.reproKMin, P.reproKMax), investFrac: jig(0.4375, 0.12, P.investFracMin, P.investFracMax),
   };
 }
@@ -122,11 +115,10 @@ export function develop(g) {
   return parts;
 }
 
-// MUTACIÓN (operadores de 2.2 §7): paramétrica (frecuente, suave) + estructurales (raras, gran efecto = cruza-valles).
+// MUTACIÓN: paramétrica (frecuente, suave) + estructurales (raras, gran efecto).
 export function mutate(g, rng) {
   const B = GENOME_P, n = cloneGenome(g), mr = B.mutRate;
-  // RITMO de mutación escalable (UI): `chance(p)` = evento con prob p·mutRate. A mutRate=1 consume el RNG y compara
-  // EXACTAMENTE igual que antes (byte-idéntico). Escala solo PROBABILIDADES (ritmo), no las magnitudes gaussianas.
+  // `chance(p)` = evento con prob p·mutRate (ritmo escalable por UI). A mutRate=1 byte-idéntico. Escala PROBABILIDADES, no magnitudes.
   const chance = (p) => rng.next() < p * mr;
   // paramétricas sobre la raíz
   const r = n.root;
@@ -154,19 +146,18 @@ export function mutate(g, rng) {
     if (chance(0.12)) m.phase = (m.phase + rng.gaussian() * 0.12 + 1) % 1;
     if (chance(0.01)) m.hom = HOM++;                                                              // homología (rarísima)
   }
-  // CEREBRO: muta los pesos de NACIMIENTO (lo heredable). La copia de trabajo (aprendida en vida) NO se hereda.
+  // CEREBRO: muta los pesos de NACIMIENTO (lo heredable); la copia de trabajo aprendida en vida NO se hereda.
   if (n.brain) { const b = n.brain; for (let k = 0; k < b.length; k++) { if (chance(0.08)) { let v = b[k] + rng.gaussian() * 0.15; b[k] = v < -3 ? -3 : v > 3 ? 3 : v; } } }
   if (chance(0.1)) n.hue = (n.hue + rng.gaussian() * 0.03 + 1) % 1;   // deriva lenta del linaje (color)
-  // r/K (historia de vida): perturba el umbral de cría relativo y la inversión por cría → el eje r↔K deriva bajo selección.
+  // r/K (historia de vida): umbral de cría relativo + inversión por cría.
   if (chance(0.12)) n.reproK = clamp(n.reproK + rng.gaussian() * 0.08, B.reproKMin, B.reproKMax);
   if (chance(0.12)) n.investFrac = clamp(n.investFrac + rng.gaussian() * 0.05, B.investFracMin, B.investFracMax);
   return n;
 }
 
-// M7 — RECOMBINACIÓN SEXUAL por MÓDULOS HOMÓLOGOS (2.4 eje 1). Alinea los módulos de ambos padres por su marca de
-// homología (hom, como genes Hox) y el hijo toma cada módulo de un padre u otro con LIGAMIENTO (tramos contiguos) →
-// recombina órganos enteros y bien formados → la cría es SIEMPRE un cuerpo válido (preserva la garantía de 2.2). El
-// cerebro se cruza por un punto. NO muta aquí (el sim aplica mutate después, como en la vía asexual).
+// RECOMBINACIÓN SEXUAL por MÓDULOS HOMÓLOGOS. Alinea los módulos de ambos padres por su marca `hom` y el hijo toma cada
+// módulo de un padre u otro con LIGAMIENTO (tramos contiguos) → recombina órganos enteros → la cría es SIEMPRE un cuerpo
+// válido. El cerebro se cruza por un punto. NO muta aquí (el sim aplica mutate después).
 export function recombine(gA, gB, rng) {
   const root = {}; for (const k of ['size', 'aspect', 'tissue', 'oscAmp', 'phase']) root[k] = (rng.next() < 0.5 ? gA : gB).root[k];
   const byHom = new Map();

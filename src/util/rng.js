@@ -1,5 +1,4 @@
-// RNG reproducible (mulberry32) + gaussiano (Box-Muller). Determinismo = requisito de validación
-// (mismo seed → misma corrida; checksum byte-idéntico). Reutiliza el patrón probado de la app actual.
+// RNG reproducible (mulberry32) + gaussiano (Box-Muller). Mismo seed → misma corrida (byte-idéntico).
 // Si seed es null → Math.random (no reproducible).
 
 export function makeRng(seed) {

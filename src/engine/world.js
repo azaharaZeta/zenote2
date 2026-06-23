@@ -1,13 +1,9 @@
-// CAPA A — LEYES DEL MUNDO (2.1). Código KEEPER: la base física del motor real (M5+ construye encima).
-// Dos monedas INDEPENDIENTES (2.1 §0): MATERIA cerrada (cicla: nutriente↔organismo↔detrito↔nutriente) y ENERGÍA
-// abierta (entra como LUZ, se almacena, sale como CALOR). Su independencia dimensional hace imposible la trampa
-// "energía = materia relabelada" del modelo viejo. Campos en rejilla (∝ tamaño → densidad constante), toro.
-//
-// Compartimentos (el PRODUCTOR es la VEGETACIÓN parametrizada, no los organismos — todos los organismos son ANIMALES):
-//   MATERIA  = Σ nutrient (inorgánica) + Σ veg (vegetación) + Σ detritusM (orgánica muerta) + Σ animales.mass   = CONSTANTE
-//   ENERGÍA  = Σ animales.E + Σ veg·vegEcoef (embebida en vegetación) + Σ detritusE  ;  entra: lightCaptured (vía vegetación) ;  sale: heat
-// La LUZ ya no la captan los organismos: la capta la VEGETACIÓN al crecer (vegStep). Los animales obtienen energía PASTÁNDOLA
-// (o cazando/carroñeando, en sim). Toda transacción re-enruta materia (conserva) y contabiliza energía (disipa).
+// LEYES DEL MUNDO: la base física del motor. Dos monedas INDEPENDIENTES: MATERIA cerrada (cicla nutriente↔organismo↔detrito↔
+// nutriente) y ENERGÍA abierta (entra como LUZ, se almacena, sale como CALOR). Campos en rejilla (∝ tamaño), toro.
+//   MATERIA = Σ nutrient + Σ veg + Σ detritusM + Σ animales.mass = CONSTANTE
+//   ENERGÍA = Σ animales.E + Σ veg·vegEcoef + Σ detritusE ; entra: lightCaptured (vía vegetación) ; sale: heat
+// El PRODUCTOR es la VEGETACIÓN parametrizada: capta luz al crecer (vegStep); los animales la pastan (o cazan/carroñean, en
+// sim). Toda transacción re-enruta materia (conserva) y contabiliza energía (disipa).
 
 import { makeRng } from '../util/rng.js';
 import { WORLD_P } from '../config.js';   // parámetros del mundo: fuente única en config.js
@@ -25,8 +21,8 @@ export class World {
     this.detritusM = new Float32Array(N);  // materia orgánica muerta
     this.detritusE = new Float32Array(N);  // energía residual del detrito
     this._scratch = new Float32Array(N);
-    this._diffScratch = new Float32Array(N);   // PERF: scratch único para la difusión (ping-pong, sin copia); reusado por las 4 pasadas (2 arrays vivos/pasada → cache-friendly a cualquier N)
-    this.cover = new Float32Array(N);      // COBERTURA: refugio ESTÁTICO y NO comestible (separado del alimento) → nicho SEPARABLE; la captura lo lee si coverStrength>0
+    this._diffScratch = new Float32Array(N);   // PERF: scratch único para la difusión (ping-pong, sin copia)
+    this.cover = new Float32Array(N);      // COBERTURA: refugio ESTÁTICO no comestible → nicho separable; la captura lo lee si coverStrength>0
     this._buildLight(seed);
     this._buildCover(seed);
     // Libro mayor (acumuladores de energía abierta): monótonos.
@@ -36,9 +32,8 @@ export class World {
     this.lightMul = 1;        // multiplicador GLOBAL de luz (lab, en vivo): escala la productividad sin re-hornear light0
   }
 
-  // COBERTURA (refugio NO comestible, separado del alimento): campo ESTÁTICO [0,1] en parches que da refugio a la presa (escape ∝
-  // cover_local·coverStrength) sin ser comida → nicho separable "esconderse ≠ comer". Estático: no toca materia/energía (conserva).
-  // Lo lee la dinámica (captura) solo si coverStrength>0; el cerebro lo sensa por ∇cover.
+  // COBERTURA: campo ESTÁTICO [0,1] en parches (ruido fBm), refugio NO comestible (escape ∝ cover_local·coverStrength) → nicho
+  // separable "esconderse ≠ comer". No toca materia/energía. La lee la captura solo si coverStrength>0; el cerebro lo sensa por ∇cover.
   _buildCover(seed) {
     const rng = makeRng((seed ^ 0x5bf03635) >>> 0), cols = this.cols, rows = this.rows, lobes = [];
     let sumAmp = 0;
@@ -55,14 +50,11 @@ export class World {
       } }
   }
 
-  // Luz base: SUMA DE LÓBULOS = ondas planas con frecuencia/dirección/fase ALEATORIAS (por semilla) → parches ricos/pobres
-  // sin costura en el toro (freqs enteras → periódicas), distintos en cada mundo "desde el inicio". Cada lóbulo lleva además
-  // freqs/offsets de VAGABUNDEO (para la deriva temporal de stepLight). El "abismo" puede así formar ZONAS que se
-  // reorganizan sin dirección neta (no una traslación lineal).
+  // Luz base = suma de lóbulos (ondas planas con freq/dir/fase aleatorias por semilla; freqs enteras → periódicas en el toro,
+  // sin costura). Cada lóbulo lleva freqs/offsets de VAGABUNDEO para la deriva temporal (stepLight).
   _buildLight(seed) {
     const rng = makeRng(seed); this._lobes = []; let sumAmp = 0;
-    // RUIDO FRACTAL (fBm): octavas de freq creciente y amplitud decreciente → zonas irregulares naturales; freqs ENTERAS → periódicas
-    // en el toro (sin costura). El vagabundeo es fuerte en las octavas grandes y débil en el detalle (wa ∝ amplitud) → solo lo grande fluye.
+    // fBm: octavas de freq creciente y amplitud decreciente. Vagabundeo ∝ amplitud (wa) → solo las octavas grandes fluyen.
     const octaves = [{ lo: 1, hi: 3, amp: 1.0, n: 3 }, { lo: 4, hi: 7, amp: 0.5, n: 3 }, { lo: 8, hi: 14, amp: 0.25, n: 4 }];
     for (const oc of octaves) for (let k = 0; k < oc.n; k++) {
       const kx = oc.lo + (rng.next() * (oc.hi - oc.lo + 1) | 0);     // freq entera en la banda de la octava
@@ -74,17 +66,15 @@ export class World {
     }
     this._lobeNorm = sumAmp > 0 ? 1 / (0.62 * sumAmp) : 1;   // normaliza a ~[-1,1] (factor <1 = más contraste; se clampa)
     this._ep = new Float64Array(this._lobes.length);         // fase efectiva por lóbulo (preasignada; sin asignar en re-horneado)
-    this._precomputeLight();   // PERF (N2.1): tablas 1D sin/cos de θ=kx·u+ky·v por lóbulo → el re-horneado evita Math.sin por celda (ver _fillLight)
+    this._precomputeLight();   // PERF: tablas sin/cos para re-hornear la luz sin Math.sin por celda (ver _fillLight)
     this._fillLight(0);
   }
 
-  // PERF (N2.1) — el re-horneado de la luz era el coste #1 del tick (~45%): 10 Math.sin POR CELDA. Aquí precomputamos, UNA vez por
-  // mundo, las tablas 1D sin/cos de kx·u (por columna) y ky·v (por fila) por lóbulo. Como θ=kx·u+ky·v es ESTÁTICO (no depende del
-  // tiempo de flujo s) y solo la fase ep deriva, sin(θ+ep)=sinθ·cos ep+cosθ·sin ep se evalúa en el bucle de celdas SIN trascendentes
-  // (sinθ/cosθ se reconstruyen con la fórmula de la suma desde las tablas 1D → memoria O(L·(cols+rows)), no O(L·celdas)). Misma física,
-  // distinto redondeo → re-fija el dorado. Las cos/sin de ep (L lóbulos) se calculan 1× por re-horneado en _fillLight.
+  // PERF — precomputa 1× por mundo las tablas 1D sin/cos de kx·u (por columna) y ky·v (por fila) por lóbulo. Como θ=kx·u+ky·v
+  // es ESTÁTICO y solo la fase ep deriva, sin(θ+ep)=sinθ·cos ep+cosθ·sin ep se evalúa en el bucle de celdas SIN trascendentes
+  // (era el coste #1 del tick). Byte-idéntico: la diferencia sub-ULP la absorbe el f32 de light0. Memoria O(L·(cols+rows)).
   _precomputeLight() {
-    const lobes = this._lobes, L = lobes.length, cols = this.cols, rows = this.rows, T = 6.283;   // 6.283: MISMO factor que el _fillLight original (no 2π exacto) → misma estructura espacial
+    const lobes = this._lobes, L = lobes.length, cols = this.cols, rows = this.rows, T = 6.283;   // 6.283 (no 2π exacto): mismo factor en todo el campo
     this._SU = new Float64Array(cols * L); this._CU = new Float64Array(cols * L);   // sin/cos(kx·u) por columna×lóbulo
     this._SV = new Float64Array(rows * L); this._CV = new Float64Array(rows * L);   // sin/cos(ky·v) por fila×lóbulo
     this._amp = new Float64Array(L); this._ce = new Float64Array(L); this._se = new Float64Array(L);   // amp del lóbulo · cos/sin(ep) (se rellenan por re-horneado)
@@ -94,8 +84,7 @@ export class World {
     }
   }
 
-  // Rellena light0 en el "tiempo de flujo" s. Cada lóbulo VAGABUNDEA su fase = base + WA·(osciladores lentos) → al avanzar s
-  // las zonas se forman/disuelven y se mueven en direcciones variables (NO traslación lineal). s=0 = patrón base.
+  // Rellena light0 en el "tiempo de flujo" s: cada lóbulo vagabundea su fase → al avanzar s las zonas se forman/mueven. s=0 = base.
   _fillLight(s) {
     const { cols, rows } = this, P = this.P, lobes = this._lobes, L = lobes.length, norm = this._lobeNorm, ep = this._ep, WA = 3.0;
     const SU = this._SU, CU = this._CU, SV = this._SV, CV = this._CV, amp = this._amp, ce = this._ce, se = this._se;
@@ -116,10 +105,8 @@ export class World {
     }
   }
 
-  // CORRIENTE DEL ABISMO: re-hornea el campo de luz avanzando el "tiempo de flujo" s = lightFlow·tick → el fondo (paisaje de
-  // recurso) FLUYE formando zonas que se reorganizan; los organismos lo persiguen vía su sensor de ∇luz (no hay asentamiento
-  // permanente). Throttle por lightFlowEvery (la luz cambia despacio). lightFlow=0 → light0 NO cambia tras el horneado inicial
-  // (byte-idéntico). Determinista (función de tick). La luz es ENERGÍA (fuente abierta) → variar el campo no afecta a la conservación.
+  // CORRIENTE DEL ABISMO: re-hornea la luz avanzando s = lightFlow·tick → el fondo fluye y los organismos lo persiguen (∇luz).
+  // Throttle por lightFlowEvery. lightFlow=0 → no cambia tras el horneado inicial (byte-idéntico). Determinista (función de tick).
   stepLight(tick) {
     const P = this.P; if (!(P.lightFlow > 0) || tick % P.lightFlowEvery !== 0) return;
     this._fillLight(P.lightFlow * tick);
@@ -138,9 +125,8 @@ export class World {
     this.daylight = P.dayNightAmp > 0 ? Math.max(0, 1 + P.dayNightAmp * Math.sin(tick / P.dayNightPeriod * 6.283)) : 1;
   }
 
-  // VEGETACIÓN (productor parametrizado): crece logísticamente captando LUZ y consumiendo NUTRIENTE, y senesce a detrito. K(celda) =
-  // vegKcoef·luz local → los parches SIGUEN al campo de luz. CONSERVA: materia nutriente→veg→detrito · energía luz→veg (captada) y veg→calor.
-  // Frontera genotipo→física: la vegetación es física del mundo (no evoluciona); qué animal la explota lo dicta la selección.
+  // VEGETACIÓN (productor parametrizado): crece logísticamente captando LUZ y consumiendo NUTRIENTE, senesce a detrito.
+  // K(celda) = vegKcoef·luz local → los parches siguen al campo de luz. Conserva. Frontera genotipo→física: es física del mundo (no evoluciona).
   vegStep() {
     const P = this.P, veg = this.veg, N = this.nutrient, Dm = this.detritusM, prev = this._scratch;
     const g = P.vegGrowth, kc = P.vegKcoef, ec = P.vegEcoef, dec = P.vegDecay, seed = P.vegSeed, lm = this.lightMul * this.daylight;
@@ -182,11 +168,9 @@ export class World {
     }
   }
 
-  // Difusión conservativa (4 vecinos, toro) de un campo, por PING-PONG (sin `prev.set`) y SIN el operador `%` por celda: split
-  // interior/borde (solo x=0 y x=cols−1 envuelven; el interior usa i±1 directos). Byte-idéntico al Jacobi previo (mismos índices
-  // vecinos, misma aritmética leyendo del buffer viejo `src`, mismo orden de suma). 4 pasadas (2 arrays vivos/pasada → cache-friendly
-  // a cualquier N; preferido a fusionar, que mantiene 8 arrays y satura L2 en mundos grandes). Σ constante. Reapuntar this[name] es
-  // seguro: sim/worker leen W.<campo>[i] en vivo (nada cachea la identidad del array entre ticks).
+  // Difusión conservativa (4 vecinos, toro) de un campo, por PING-PONG (sin `prev.set`) y sin `%` por celda (split interior/borde).
+  // Byte-idéntico al Jacobi previo. 4 pasadas separadas (2 arrays/pasada, cache-friendly; NO fusionar: 8 arrays saturan L2 en mundos
+  // grandes). Reapuntar this[name] es seguro: sim/worker leen W.<campo>[i] en vivo.
   _diffuse(name, rate) {
     if (rate <= 0) return;
     const cols = this.cols, rows = this.rows, cm1 = cols - 1, src = this[name], dst = this._diffScratch;

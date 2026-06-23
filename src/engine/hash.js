@@ -1,5 +1,4 @@
-// Spatial hash uniforme (rejilla + lista enlazada), TOROIDAL. Vecindad en O(n) — nada de O(n²) (regla §2 de perf).
-// Reconstruido cada tick. Reutiliza el patrón probado de la app actual (world.js). Sin asignaciones en caliente.
+// Spatial hash uniforme (rejilla + lista enlazada), toroidal. Vecindad en O(n). Reconstruido cada tick; sin asignaciones en caliente.
 
 export class SpatialHash {
   constructor(worldSize, cell) {
@@ -8,7 +7,7 @@ export class SpatialHash {
     this.cols = Math.max(1, Math.ceil(worldSize / cell));
     this.rows = this.cols;                              // mundo cuadrado
     this.head = new Int32Array(this.cols * this.rows).fill(-1);
-    this.next = null;                                   // dimensionado al pool (setCapacity)
+    this.next = null;                                   // se dimensiona al pool (setCapacity)
   }
 
   setCapacity(cap) { this.next = new Int32Array(cap); }

@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Análisis de primeros principios — Zenote
 
 > **Propósito.** Determinar qué **leyes de conservación** existen en el modelo biológico, cuáles se **violan o

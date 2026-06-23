@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Mapa de arquitectura del sistema evolutivo — Zenote
 
 > **Propósito.** Descripción de alto nivel de CÓMO está construido el simulador evolutivo: subsistemas,

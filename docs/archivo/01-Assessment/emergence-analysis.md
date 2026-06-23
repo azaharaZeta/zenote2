@@ -1,3 +1,5 @@
+> ⚠️ HISTÓRICO — razonamiento del rediseño. El estado vivo manda: ver [`docs/MODELO-ACTUAL.md`](../MODELO-ACTUAL.md).
+
 # Análisis de emergencia — Zenote
 
 > **Propósito.** Para cada conducta importante del ecosistema, separar **lo que es genuinamente emergente** (sale
